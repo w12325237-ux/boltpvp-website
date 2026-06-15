@@ -1779,24 +1779,180 @@
   </div>
 
   <script>
+
     const IP = 'boltpvp.fun';
     const SUPPORT_EMAIL = 'kprlord3@gmail.com';
     const OWNER_IGN = 'ZenZboy';
-    let activeAdmin = JSON.parse(localStorage.getItem('boltpvpActiveAdmin') || 'null');
+
+    const TOKEN_KEYS = {
+      player: 'boltpvpPlayerToken',
+      admin: 'boltpvpAdminToken',
+      profile: 'boltpvpProfile',
+      adminProfile: 'boltpvpActiveAdmin'
+    };
+
+    let profile = JSON.parse(localStorage.getItem(TOKEN_KEYS.profile) || 'null');
+    let activeAdmin = JSON.parse(localStorage.getItem(TOKEN_KEYS.adminProfile) || 'null');
+    let playerTicketsCache = [];
+    let adminTicketsCache = [];
+    let updatesCache = [];
+    let detailBackTarget = 'home';
+    let adminFilter = 'unsolved';
+    let currentType = 'General Support';
+    let updateImageData = [];
+    let editingUpdateId = null;
 
     const pages = document.querySelectorAll('.page');
     const pageLinks = document.querySelectorAll('[data-page]');
     const siteHeader = document.getElementById('siteHeader');
     const body = document.body;
+    const ticketBubbleCount = document.getElementById('ticketBubbleCount');
 
-    let detailBackTarget = 'home';
-    let adminFilter = 'unsolved';
-    let currentType = '';
+    function escapeHtml(value=''){
+      return String(value).replace(/[&<>"']/g, char => ({
+        '&':'&amp;',
+        '<':'&lt;',
+        '>':'&gt;',
+        '"':'&quot;',
+        "'":'&#39;'
+      }[char]));
+    }
+
+    function normalizeName(name){
+      return String(name || '').trim().toLowerCase();
+    }
+
+    function getPlayerToken(){
+      return localStorage.getItem(TOKEN_KEYS.player) || '';
+    }
+
+    function getAdminToken(){
+      return localStorage.getItem(TOKEN_KEYS.admin) || '';
+    }
+
+    async function api(path, options = {}){
+      const headers = {
+        'Content-Type':'application/json',
+        ...(options.headers || {})
+      };
+
+      const token = options.token || '';
+      if(token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch(path, {
+        method: options.method || 'GET',
+        headers,
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+
+      let data = null;
+      try{
+        data = await res.json();
+      }catch{
+        data = {ok:false,error:'Server did not return JSON'};
+      }
+
+      if(!res.ok || data.ok === false){
+        throw new Error(data.error || `Request failed: ${res.status}`);
+      }
+
+      return data;
+    }
+
+    function showCopyToast(title = 'IP COPIED', text = `${IP.toUpperCase()} copied to clipboard`){
+      const toast = document.getElementById('copyToast');
+      toast.querySelector('strong').textContent = title;
+      toast.querySelector('span').textContent = text;
+      toast.classList.add('show');
+      clearTimeout(showCopyToast.timer);
+      showCopyToast.timer = setTimeout(() => toast.classList.remove('show'), 2600);
+    }
+
+    function showLoginToast(){
+      const toast = document.getElementById('loginToast');
+      toast.classList.add('show');
+      clearTimeout(showLoginToast.timer);
+      showLoginToast.timer = setTimeout(() => toast.classList.remove('show'), 2800);
+    }
+
+    function showAuthToast(message = 'Wrong password or username. Try again.', title = 'WRONG LOGIN'){
+      const toast = document.getElementById('authToast');
+      toast.querySelector('strong').textContent = title;
+      toast.querySelector('span').textContent = message;
+      toast.classList.add('show');
+      clearTimeout(showAuthToast.timer);
+      showAuthToast.timer = setTimeout(() => toast.classList.remove('show'), 4200);
+    }
+
+    document.getElementById('closeCopyToast').onclick = () => document.getElementById('copyToast').classList.remove('show');
+    document.getElementById('closeLoginToast').onclick = () => document.getElementById('loginToast').classList.remove('show');
+    document.getElementById('closeAuthToast').onclick = () => document.getElementById('authToast').classList.remove('show');
+
+    async function copyIP(){
+      try{
+        await navigator.clipboard.writeText(IP);
+        showCopyToast('IP COPIED', `${IP.toUpperCase()} copied to clipboard`);
+      }catch{
+        const temp = document.createElement('input');
+        temp.value = IP;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        temp.remove();
+        showCopyToast('IP COPIED', `${IP.toUpperCase()} copied to clipboard`);
+      }
+    }
+
+    document.querySelectorAll('.ip-card, #copyIpTwo, #copySmallIp').forEach(el => {
+      if(el) el.addEventListener('click', e => {
+        e.preventDefault();
+        copyIP();
+      });
+    });
+
+    function openModal(modal){
+      if(!modal) return;
+      modal.classList.remove('hidden');
+    }
+
+    function closeModal(modal){
+      if(!modal) return;
+      modal.classList.add('hidden');
+    }
+
+    function askConfirm(title, text, yesText = 'DELETE'){
+      return new Promise(resolve => {
+        const modal = document.getElementById('confirmModal');
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmText').textContent = text;
+        document.getElementById('confirmYesBtn').textContent = yesText;
+
+        openModal(modal);
+
+        const yes = document.getElementById('confirmYesBtn');
+        const no = document.getElementById('confirmNoBtn');
+
+        const cleanup = answer => {
+          yes.onclick = null;
+          no.onclick = null;
+          closeModal(modal);
+          resolve(answer);
+        };
+
+        yes.onclick = () => cleanup(true);
+        no.onclick = () => cleanup(false);
+      });
+    }
 
     function goPage(id){
       pages.forEach(page => page.classList.toggle('active', page.id === id));
-      document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.page === id));
-      document.body.classList.toggle('home-active', id === 'home');
+      pageLinks.forEach(link => link.classList.toggle('active', link.dataset.page === id));
+      body.classList.toggle('home-active', id === 'home');
+
+      if(id === 'updates') loadUpdates();
+      if(id === 'staffs') renderStaffs();
+      if(id === 'support') loadPlayerTickets();
+
       window.scrollTo({top:0,behavior:'smooth'});
     }
 
@@ -1809,163 +1965,40 @@
       });
     });
 
-    const worldBg = document.getElementById('worldBg');
-    const worldFade = document.getElementById('worldFade');
-    const skyWash = document.getElementById('skyWash');
-    const cloudLayer = document.getElementById('cloudLayer');
-
-    let lastScroll = 0;
-
     function updateScrollEffects(){
-      const now = window.scrollY;
-      const fadeAmount = Math.min(now / 520, 1);
+      const y = window.scrollY || 0;
+      const fadeAmount = Math.min(y / 460, 1);
+      const skyWash = document.getElementById('skyWash');
+      if(skyWash) skyWash.style.opacity = String(.32 + fadeAmount * .50);
 
-      siteHeader.classList.toggle('header-hidden', now > lastScroll && now > 130);
-
-      // Banner stays stuck in place. Only the lower sky wash/cloud layer fades in.
-      worldBg.style.opacity = '1';
-      worldBg.style.transform = 'none';
-      worldFade.style.opacity = String(.35 + fadeAmount * .25);
-      skyWash.style.opacity = String(.32 + fadeAmount * .50);
-      cloudLayer.style.opacity = String(.45 + fadeAmount * .55);
-
-      lastScroll = now;
+      if(siteHeader){
+        siteHeader.classList.toggle('header-hidden', y > 720);
+      }
     }
 
     window.addEventListener('scroll', updateScrollEffects, {passive:true});
     updateScrollEffects();
 
-    const copyToast = document.getElementById('copyToast');
-    const closeCopyToast = document.getElementById('closeCopyToast');
-    let copyToastTimer;
-
-    function showCopyToast(){
-      clearTimeout(copyToastTimer);
-      copyToast.classList.add('show');
-      copyToastTimer = setTimeout(() => copyToast.classList.remove('show'), 2200);
-    }
-
-    closeCopyToast.addEventListener('click', () => {
-      clearTimeout(copyToastTimer);
-      copyToast.classList.remove('show');
-    });
-
-    async function copyIP(button){
-      const text = IP;
-      try{
-        if(navigator.clipboard && window.isSecureContext){
-          await navigator.clipboard.writeText(text);
-        }else{
-          const tempInput = document.createElement('textarea');
-          tempInput.value = text;
-          tempInput.style.position = 'fixed';
-          tempInput.style.left = '-9999px';
-          tempInput.style.top = '-9999px';
-          document.body.appendChild(tempInput);
-          tempInput.focus();
-          tempInput.select();
-          document.execCommand('copy');
-          tempInput.remove();
-        }
-
-        showCopyToast();
-
-        if(button){
-          const oldText = button.textContent;
-          button.textContent = 'COPIED ✓';
-          setTimeout(() => button.textContent = oldText, 1200);
-        }
-      }catch{
-        prompt('Copy this IP:', text);
-      }
-    }
-
-    document.getElementById('copySmallIp').onclick = e => {
-      e.stopPropagation();
-      copyIP(e.currentTarget);
-    };
-
-    document.getElementById('copyIpTwo').onclick = e => {
-      e.stopPropagation();
-      copyIP(e.currentTarget);
-    };
-
-    document.querySelector('.ip-card').addEventListener('click', () => {
-      copyIP(document.getElementById('copySmallIp'));
-    });
-
-    const loginToast = document.getElementById('loginToast');
-    const closeLoginToast = document.getElementById('closeLoginToast');
-    let loginToastTimer;
-
-    function showLoginToast(){
-      clearTimeout(loginToastTimer);
-      loginToast.classList.add('show');
-      loginToastTimer = setTimeout(() => loginToast.classList.remove('show'), 2600);
-    }
-
-    closeLoginToast.addEventListener('click', () => {
-      clearTimeout(loginToastTimer);
-      loginToast.classList.remove('show');
-    });
-
-    const authToast = document.getElementById('authToast');
-    const closeAuthToast = document.getElementById('closeAuthToast');
-    let authToastTimer;
-
-    function showAuthToast(message = 'Wrong password or username. Try again.'){
-      clearTimeout(authToastTimer);
-      authToast.querySelector('span').textContent = message;
-      authToast.classList.add('show');
-      authToastTimer = setTimeout(() => authToast.classList.remove('show'), 2600);
-    }
-
-    closeAuthToast.addEventListener('click', () => {
-      clearTimeout(authToastTimer);
-      authToast.classList.remove('show');
-    });
-
     document.querySelectorAll('.faq-item button').forEach(button => {
-      button.addEventListener('click', () => button.parentElement.classList.toggle('open'));
+      button.onclick = () => button.parentElement.classList.toggle('open');
     });
-
-    const playerForm = document.getElementById('playerLoginForm');
-    const playerIgnInput = document.getElementById('playerIgn');
-    const playerPassInput = document.getElementById('playerPass');
-    const loginStrip = document.getElementById('loginStrip');
-    const headerProfile = document.getElementById('headerProfile');
-
-    function getUsers(){
-      return JSON.parse(localStorage.getItem('boltpvpUsers') || '{}');
-    }
-
-    function saveUsers(users){
-      localStorage.setItem('boltpvpUsers', JSON.stringify(users));
-    }
-
-    function getProfile(){
-      return JSON.parse(localStorage.getItem('boltpvpProfile') || 'null');
-    }
-
-    function saveProfile(profile){
-      localStorage.setItem('boltpvpProfile', JSON.stringify(profile));
-    }
 
     function renderProfile(){
-      const profile = getProfile();
+      const loginStrip = document.getElementById('loginStrip');
+      const headerProfile = document.getElementById('headerProfile');
 
       if(!profile || !profile.ign){
         loginStrip.classList.remove('logged-away');
         headerProfile.classList.remove('show');
         setTimeout(() => headerProfile.classList.add('hidden'), 350);
-        if (typeof renderAdminSession === 'function') renderAdminSession();
+        updateBubble();
+        renderAdminSession();
         return;
       }
 
       loginStrip.classList.add('logged-away');
 
       const ign = escapeHtml(profile.ign);
-
       headerProfile.innerHTML = `
         <img src="https://visage.surgeplay.com/full/110/${encodeURIComponent(profile.ign)}" alt="${ign} skin">
         <div>
@@ -1982,75 +2015,365 @@
       headerProfile.classList.remove('hidden');
       requestAnimationFrame(() => headerProfile.classList.add('show'));
 
-      document.getElementById('logoutBtn').onclick = () => {
-        localStorage.removeItem('boltpvpProfile');
+      document.getElementById('logoutBtn').onclick = async () => {
+        const token = getPlayerToken();
+        try{
+          if(token) await api('/api/auth', {method:'POST', body:{action:'logout', token}});
+        }catch{}
+        localStorage.removeItem(TOKEN_KEYS.player);
+        localStorage.removeItem(TOKEN_KEYS.profile);
+        profile = null;
+        playerTicketsCache = [];
         renderProfile();
       };
 
       const ticketIgn = document.getElementById('ticketIgn');
       if(ticketIgn) ticketIgn.value = profile.ign;
-      if (typeof renderAdminSession === 'function') renderAdminSession();
+
+      loadPlayerTickets();
+      renderAdminSession();
     }
 
-    function finishPlayerLogin(ign){
-      saveProfile({ign});
+    function saveProfile(nextProfile){
+      profile = nextProfile;
+      localStorage.setItem(TOKEN_KEYS.profile, JSON.stringify(nextProfile));
+    }
 
-      playerForm.style.transform = 'scale(.97)';
-      playerForm.style.opacity = '.6';
+    async function finishPlayerLogin(data){
+      localStorage.setItem(TOKEN_KEYS.player, data.token);
+      saveProfile({ign:data.user.ign, username:data.user.username});
+
+      const form = document.getElementById('playerLoginForm');
+      const pass = document.getElementById('playerPass');
+      form.style.transform = 'scale(.97)';
+      form.style.opacity = '.6';
 
       setTimeout(() => {
         renderProfile();
-        playerForm.style.transform = '';
-        playerForm.style.opacity = '';
-        playerPassInput.value = '';
+        form.style.transform = '';
+        form.style.opacity = '';
+        pass.value = '';
       }, 250);
     }
 
-    playerForm.addEventListener('submit', e => {
+    document.getElementById('playerLoginForm').addEventListener('submit', async e => {
       e.preventDefault();
-
-      const ign = playerIgnInput.value.trim();
-      const password = playerPassInput.value;
+      const ign = document.getElementById('playerIgn').value.trim();
+      const password = document.getElementById('playerPass').value;
 
       if(!ign || !password) return;
 
-      const users = getUsers();
-      const matchedName = Object.keys(users).find(name => normalizeName(name) === normalizeName(ign));
-      const user = matchedName ? users[matchedName] : null;
-
-      if(!user || user.password !== password){
-        showAuthToast(user ? 'Wrong password for this account.' : 'Account not found. Click SIGN UP first.');
-        playerForm.style.transform = 'translateX(-8px)';
-        setTimeout(() => playerForm.style.transform = '', 180);
-        return;
+      try{
+        const data = await api('/api/auth', {
+          method:'POST',
+          body:{action:'login', ign, password}
+        });
+        await finishPlayerLogin(data);
+      }catch(error){
+        showAuthToast(error.message.includes('not found') ? 'Account not found. Click SIGN UP first.' : error.message);
       }
-
-      finishPlayerLogin(matchedName);
     });
 
-    document.getElementById('playerSignupBtn').addEventListener('click', () => {
-      const ign = playerIgnInput.value.trim();
-      const password = playerPassInput.value;
+    document.getElementById('playerSignupBtn').addEventListener('click', async () => {
+      const ign = document.getElementById('playerIgn').value.trim();
+      const password = document.getElementById('playerPass').value;
 
       if(!ign || !password){
         showAuthToast('Enter username and password to sign up.');
         return;
       }
 
-      const users = getUsers();
-      const matchedName = Object.keys(users).find(name => normalizeName(name) === normalizeName(ign));
+      try{
+        const data = await api('/api/auth', {
+          method:'POST',
+          body:{action:'signup', ign, password}
+        });
+        await finishPlayerLogin(data);
+      }catch(error){
+        showAuthToast(error.message);
+      }
+    });
 
-      if(matchedName){
-        showAuthToast('Account already exists. Use LOGIN.');
+    async function loadSession(){
+      const token = getPlayerToken();
+      if(!token) return renderProfile();
+
+      try{
+        const data = await api('/api/auth', {token});
+        if(data.user){
+          saveProfile({ign:data.user.ign, username:data.user.username});
+        }else{
+          localStorage.removeItem(TOKEN_KEYS.player);
+          localStorage.removeItem(TOKEN_KEYS.profile);
+          profile = null;
+        }
+      }catch{
+        localStorage.removeItem(TOKEN_KEYS.player);
+        localStorage.removeItem(TOKEN_KEYS.profile);
+        profile = null;
+      }
+
+      renderProfile();
+    }
+
+    function statusClass(status){
+      const s = String(status || '').toLowerCase();
+      if(s === 'solved' || s === 'answered') return 'solved';
+      return 'pending';
+    }
+
+    function rowClass(status){
+      return statusClass(status) === 'solved' ? 'solved-row' : 'unsolved-row';
+    }
+
+    function ticketDisplayId(ticket){
+      return ticket.ticketId || ticket.id || 'TICKET';
+    }
+
+    function ticketCreated(ticket){
+      const created = ticket.createdAt || ticket.created || '';
+      if(!created) return '-';
+      try{
+        return new Date(created).toLocaleString();
+      }catch{
+        return String(created);
+      }
+    }
+
+    function ticketSummaryHTML(ticket){
+      const status = statusClass(ticket.status);
+      return `
+        <div class="ticket-summary-grid">
+          <div><strong>Player</strong><span>${escapeHtml(ticket.ign || '-')}</span></div>
+          <div><strong>Problem Type</strong><span>${escapeHtml(ticket.type || '-')}</span></div>
+          <div><strong>Submitted</strong><span>${escapeHtml(ticketCreated(ticket))}</span></div>
+          <div><strong>Solved By</strong><span>${ticket.solvedBy ? escapeHtml(`${ticket.solvedBy.ign} • ${ticket.solvedBy.rank}`) : '-'}</span></div>
+          <div><span class="status ${status}">${status === 'solved' ? 'SOLVED' : 'PENDING'}</span></div>
+        </div>
+      `;
+    }
+
+    async function loadPlayerTickets(){
+      if(!getPlayerToken()){
+        playerTicketsCache = [];
+        updateBubble();
+        return [];
+      }
+
+      try{
+        const data = await api('/api/tickets', {token:getPlayerToken()});
+        playerTicketsCache = data.tickets || [];
+      }catch(error){
+        playerTicketsCache = [];
+        if(!String(error.message).toLowerCase().includes('login')) showAuthToast(error.message, 'TICKET ERROR');
+      }
+
+      updateBubble();
+      return playerTicketsCache;
+    }
+
+    function getVisibleTicketsForProfile(){
+      return playerTicketsCache || [];
+    }
+
+    function updateBubble(){
+      const count = getVisibleTicketsForProfile().filter(ticket => statusClass(ticket.status) !== 'solved').length;
+      if(ticketBubbleCount) ticketBubbleCount.textContent = count;
+    }
+
+    document.getElementById('ticketBubble').onclick = async () => {
+      if(!profile || !getPlayerToken()){
+        showLoginToast();
+        goPage('home');
+        return;
+      }
+      await loadPlayerTickets();
+      showHistory();
+    };
+
+    document.getElementById('closeHistory').onclick = () => closeModal(document.getElementById('historyModal'));
+
+    function showHistory(){
+      const wrap = document.getElementById('ticketHistory');
+      const tickets = getVisibleTicketsForProfile();
+
+      wrap.innerHTML = tickets.length ? '' : '<p>No tickets created yet.</p>';
+
+      tickets.forEach(ticket => {
+        const row = document.createElement('div');
+        row.className = `ticket-row ticket-clickable ${rowClass(ticket.status)}`;
+        row.innerHTML = `
+          <h3>${escapeHtml(ticketDisplayId(ticket))} • ${escapeHtml(ticket.type || '')}</h3>
+          <p><b>IGN:</b> ${escapeHtml(ticket.ign || '-')} • <b>CREATED:</b> ${escapeHtml(ticketCreated(ticket))}</p>
+          <p><b>PROBLEM:</b> ${escapeHtml(ticket.explain || '-')}</p>
+          <span class="status ${statusClass(ticket.status)}">${statusClass(ticket.status) === 'solved' ? 'SOLVED' : 'PENDING'}</span>
+          ${ticket.response ? `<div class="response"><b>STAFF RESPONSE:</b><br>${escapeHtml(ticket.response)}</div>` : ''}
+        `;
+        row.onclick = () => {
+          closeModal(document.getElementById('historyModal'));
+          openTicketDetails(ticket.id, 'home');
+        };
+        wrap.appendChild(row);
+      });
+
+      openModal(document.getElementById('historyModal'));
+    }
+
+    function openTicketDetails(ticketId, backTarget = 'home'){
+      const ticket = [...playerTicketsCache, ...adminTicketsCache].find(t => t.id === ticketId);
+      if(!ticket){
+        showAuthToast('Ticket not found.', 'ERROR');
         return;
       }
 
-      users[ign] = {password, created:new Date().toLocaleString()};
-      saveUsers(users);
-      finishPlayerLogin(ign);
+      detailBackTarget = backTarget;
+      pages.forEach(page => page.classList.toggle('active', page.id === 'ticketDetailsPage'));
+      pageLinks.forEach(link => link.classList.remove('active'));
+      body.classList.remove('home-active');
+
+      document.getElementById('detailTicketTitle').textContent = ticketDisplayId(ticket);
+      document.getElementById('detailIgn').textContent = ticket.ign || '-';
+      document.getElementById('detailType').textContent = ticket.type || '-';
+      document.getElementById('detailDiscord').textContent = ticket.discord || 'Not provided';
+      document.getElementById('detailStatus').textContent = statusClass(ticket.status) === 'solved' ? 'Solved' : 'Pending';
+      document.getElementById('detailCreated').textContent = ticketCreated(ticket);
+      document.getElementById('detailOrder').textContent = ticket.order || '-';
+      document.getElementById('detailProblem').textContent = ticket.explain || '-';
+      document.getElementById('detailProof').textContent = ticket.attachmentName || ticket.attachment || '-';
+      document.getElementById('detailResponse').textContent = ticket.response || 'No staff response yet.';
+
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
+
+    document.getElementById('backToTickets').onclick = () => goPage(detailBackTarget || 'home');
+
+    const ticketModal = document.getElementById('ticketModal');
+    const ticketStepTypes = document.getElementById('ticketStepTypes');
+    const ticketForm = document.getElementById('ticketForm');
+    const ticketSuccess = document.getElementById('ticketSuccess');
+    const formTitle = document.getElementById('formTitle');
+    const storeOrderWrap = document.getElementById('storeOrderWrap');
+    const storeOrderInput = document.getElementById('storeOrderInput');
+    const ticketAttachment = document.getElementById('ticketAttachment');
+    const attachmentLabel = document.getElementById('attachmentLabel');
+
+    function updateTicketFields(){
+      const isStore = currentType === 'Store Support';
+      storeOrderWrap.classList.toggle('hidden', !isStore);
+      storeOrderInput.required = isStore;
+      if(!isStore) storeOrderInput.value = '';
+    }
+
+    document.getElementById('openTicketFlow').onclick = () => {
+      if(!profile || !getPlayerToken()){
+        showLoginToast();
+        goPage('home');
+        return;
+      }
+
+      ticketStepTypes.classList.remove('hidden');
+      ticketForm.classList.add('hidden');
+      ticketSuccess.classList.add('hidden');
+      ticketForm.reset();
+      attachmentLabel.textContent = 'ATTACH FILE / SCREENSHOT';
+      document.getElementById('ticketIgn').value = profile.ign;
+      openModal(ticketModal);
+    };
+
+    document.getElementById('closeTicket').onclick = () => closeModal(ticketModal);
+    document.getElementById('successClose').onclick = () => closeModal(ticketModal);
+
+    ticketAttachment.addEventListener('change', () => {
+      const file = ticketAttachment.files && ticketAttachment.files[0];
+      attachmentLabel.textContent = file ? `ATTACHED: ${file.name}` : 'ATTACH FILE / SCREENSHOT';
     });
 
-    renderProfile();
+    document.querySelectorAll('.type-btn').forEach(button => {
+      button.onclick = () => {
+        currentType = button.dataset.type;
+        formTitle.textContent = currentType.toUpperCase();
+        updateTicketFields();
+        ticketStepTypes.classList.add('hidden');
+        ticketForm.classList.remove('hidden');
+      };
+    });
+
+    ticketForm.addEventListener('submit', async e => {
+      e.preventDefault();
+
+      if(!profile || !getPlayerToken()){
+        closeModal(ticketModal);
+        showLoginToast();
+        goPage('home');
+        return;
+      }
+
+      const data = Object.fromEntries(new FormData(ticketForm));
+      const attachmentName = ticketAttachment.files && ticketAttachment.files[0] ? ticketAttachment.files[0].name : '';
+      const fullExplain = [data.explain, data.proof ? `
+
+Proof / Extra Details: ${data.proof}` : ''].join('\n');
+
+      try{
+        const result = await api('/api/tickets', {
+          method:'POST',
+          token:getPlayerToken(),
+          body:{
+            action:'create',
+            type:currentType,
+            discord:data.discord || 'Not provided',
+            order:currentType === 'Store Support' ? data.order : '',
+            explain:fullExplain,
+            attachmentName
+          }
+        });
+
+        playerTicketsCache.unshift(result.ticket);
+        updateBubble();
+
+        ticketForm.reset();
+        document.getElementById('ticketIgn').value = profile.ign;
+        attachmentLabel.textContent = 'ATTACH FILE / SCREENSHOT';
+        updateTicketFields();
+
+        ticketForm.classList.add('hidden');
+        ticketSuccess.classList.remove('hidden');
+
+        const ticket = result.ticket;
+        const emailBody = [
+          `Ticket ID: ${ticket.ticketId || ticket.id}`,
+          `Type: ${ticket.type}`,
+          `IGN: ${ticket.ign}`,
+          `Discord Tag: ${ticket.discord}`,
+          `Order ID: ${ticket.order || '-'}`,
+          `Problem: ${ticket.explain}`,
+          `Attachment Selected: ${ticket.attachmentName || 'No file selected'}`
+        ].join('\n');
+
+        window.open(
+          `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`BoltPvP Ticket ${ticket.ticketId || ticket.id} - ${ticket.type}`)}&body=${encodeURIComponent(emailBody)}`,
+          '_blank'
+        );
+      }catch(error){
+        showAuthToast(error.message, 'TICKET ERROR');
+      }
+    });
+
+    const fallbackSkins = [
+      'https://visage.surgeplay.com/full/240/c0RRy_99',
+      'https://visage.surgeplay.com/full/240/Cometz4321',
+      'https://visage.surgeplay.com/full/240/ColdPillow'
+    ];
+
+    const customStaffSkins = {
+      Xeden_MC:fallbackSkins[0],
+      Goated_noob:fallbackSkins[0],
+      Niki_Nos:fallbackSkins[1],
+      Volxire:fallbackSkins[2],
+      wyomie:fallbackSkins[0],
+      k0luh:fallbackSkins[1],
+      Noji:fallbackSkins[2]
+    };
 
     const staffs = {
       owner:['ZenZboy','Aquiped_','__Gazda_'],
@@ -2061,367 +2384,49 @@
     };
 
     const roleNames = {owner:'Owner',executive:'Executive',manager:'Manager',admin:'Admin',mod:'Mod'};
-    const fallbackSkins = [
-      'https://visage.surgeplay.com/full/240/c0RRy_99',
-      'https://visage.surgeplay.com/full/240/Cometz4321',
-      'https://visage.surgeplay.com/full/240/ColdPillow'
-    ];
 
-    const crackedSkinPool = [
-      'https://visage.surgeplay.com/full/240/c0RRy_99',
-      'https://visage.surgeplay.com/full/240/Cometz4321',
-      'https://visage.surgeplay.com/full/240/ColdPillow'
-    ];
-
-    const customStaffSkins = {
-      Xeden_MC:crackedSkinPool[0],
-      Goated_noob:crackedSkinPool[0],
-      Niki_Nos:crackedSkinPool[1],
-      Volxire:crackedSkinPool[2],
-      wyomie:crackedSkinPool[0],
-      k0luh:crackedSkinPool[1],
-      Noji:crackedSkinPool[2]
-    };
-    const staffList = document.getElementById('staffList');
-
-    Object.entries(staffs).forEach(([role,names], roleIndex) => {
-      const block = document.createElement('section');
-      block.className = `role-block ${role}`;
-      block.innerHTML = `<h2 class="role-title">${roleNames[role]}</h2><div class="staff-grid"></div>`;
-      const grid = block.querySelector('.staff-grid');
-
-      names.forEach((name,index) => {
-        const card = document.createElement('article');
-        card.className = 'staff-card hover-card';
-        const imgSrc = customStaffSkins[name] ? customStaffSkins[name] : `https://visage.surgeplay.com/full/240/${encodeURIComponent(name)}`;
-
-        card.innerHTML = `
-          <img src="${imgSrc}" alt="${escapeHtml(name)} skin">
-          <h3>${escapeHtml(name)}</h3>
-          <p>${roleNames[role].toUpperCase()}</p>
-        `;
-
-        card.querySelector('img').onerror = event => {
-          const img = event.currentTarget;
-          const tries = Number(img.dataset.tries || 0);
-          img.dataset.tries = String(tries + 1);
-          if(tries < fallbackSkins.length){
-            img.src = fallbackSkins[(index + roleIndex + tries) % fallbackSkins.length];
-          }else{
-            img.onerror = null;
-            img.src = ['assets/player-red.png','assets/player-yellow.png','assets/player-pig.png'][(index + roleIndex) % 3];
-          }
-        };
-
-        grid.appendChild(card);
-      });
-
-      staffList.appendChild(block);
-    });
-
-    const ticketModal = document.getElementById('ticketModal');
-    const ticketForm = document.getElementById('ticketForm');
-    const ticketStepTypes = document.getElementById('ticketStepTypes');
-    const ticketSuccess = document.getElementById('ticketSuccess');
-    const formTitle = document.getElementById('formTitle');
-    const storeOrderWrap = document.getElementById('storeOrderWrap');
-    const storeOrderInput = document.getElementById('storeOrderInput');
-    const ticketAttachment = document.getElementById('ticketAttachment');
-    const attachmentLabel = document.getElementById('attachmentLabel');
-    const ticketBubbleCount = document.getElementById('ticketBubbleCount');
-
-    function openModal(modal){
-      modal.classList.remove('hidden');
-      body.style.overflow = 'hidden';
+    function skinFor(name, roleIndex, index){
+      return customStaffSkins[name] || `https://visage.surgeplay.com/full/240/${encodeURIComponent(name)}`;
     }
 
-    function closeModal(modal){
-      modal.classList.add('hidden');
-      const allClosed = [...document.querySelectorAll('.modal')].every(m => m.classList.contains('hidden'));
-      if(allClosed) body.style.overflow = '';
-    }
+    function renderStaffs(){
+      const staffList = document.getElementById('staffList');
+      if(!staffList) return;
 
-    let confirmAction = null;
+      staffList.innerHTML = '';
 
-    function askConfirm(title, text, yesText, onYes){
-      const modal = document.getElementById('confirmModal');
-      document.getElementById('confirmTitle').textContent = title;
-      document.getElementById('confirmText').textContent = text;
-      document.getElementById('confirmYesBtn').textContent = yesText || 'YES';
-      confirmAction = onYes;
-      openModal(modal);
-    }
+      Object.entries(staffs).forEach(([role, names], roleIndex) => {
+        const block = document.createElement('section');
+        block.className = `role-block ${role}`;
+        block.innerHTML = `<h2 class="role-title">${roleNames[role]}</h2><div class="staff-grid"></div>`;
+        const grid = block.querySelector('.staff-grid');
 
-    document.getElementById('confirmYesBtn').onclick = () => {
-      const action = confirmAction;
-      confirmAction = null;
-      closeModal(document.getElementById('confirmModal'));
-      if(action) action();
-    };
+        names.forEach((name, index) => {
+          const card = document.createElement('article');
+          card.className = 'staff-card hover-card';
+          card.innerHTML = `
+            <img src="${skinFor(name, roleIndex, index)}" alt="${escapeHtml(name)} skin">
+            <h3>${escapeHtml(name)}</h3>
+            <p>${escapeHtml(roleNames[role])}</p>
+          `;
 
-    document.getElementById('confirmNoBtn').onclick = () => closeModal(document.getElementById('confirmModal'));
-    document.getElementById('closeConfirmModal').onclick = () => closeModal(document.getElementById('confirmModal'));
+          card.querySelector('img').onerror = event => {
+            const img = event.currentTarget;
+            const tries = Number(img.dataset.tries || 0);
+            img.dataset.tries = String(tries + 1);
+            if(tries < fallbackSkins.length){
+              img.src = fallbackSkins[(index + roleIndex + tries) % fallbackSkins.length];
+            }else{
+              img.onerror = null;
+              img.src = ['assets/player-red.png','assets/player-yellow.png','assets/player-pig.png'][(index + roleIndex) % 3];
+            }
+          };
 
-    document.getElementById('openTicketFlow').onclick = () => {
-      const profile = getProfile();
-
-      if(!profile || !profile.ign){
-        showLoginToast();
-        goPage('home');
-        return;
-      }
-
-      openModal(ticketModal);
-      ticketStepTypes.classList.remove('hidden');
-      ticketForm.classList.add('hidden');
-      ticketSuccess.classList.add('hidden');
-      document.getElementById('ticketIgn').value = profile.ign;
-    };
-
-    document.getElementById('closeTicket').onclick = () => closeModal(ticketModal);
-    document.getElementById('successClose').onclick = () => closeModal(ticketModal);
-
-    function updateTicketFields(){
-      const isStore = currentType === 'Store Support';
-      storeOrderWrap.classList.toggle('hidden', !isStore);
-      storeOrderInput.required = isStore;
-      if(!isStore) storeOrderInput.value = '';
-    }
-
-    ticketAttachment.addEventListener('change', () => {
-      const file = ticketAttachment.files && ticketAttachment.files[0];
-      attachmentLabel.textContent = file ? `ATTACHED: ${file.name}` : 'ATTACH FILE / SCREENSHOT';
-    });
-
-    document.querySelectorAll('.type-btn').forEach(button => {
-      button.addEventListener('click', () => {
-        currentType = button.dataset.type;
-        formTitle.textContent = currentType.toUpperCase();
-        updateTicketFields();
-        ticketStepTypes.classList.add('hidden');
-        ticketForm.classList.remove('hidden');
-      });
-    });
-
-    function getTickets(){
-      return JSON.parse(localStorage.getItem('boltpvpTickets') || '[]');
-    }
-
-    function saveTickets(tickets){
-      localStorage.setItem('boltpvpTickets', JSON.stringify(tickets));
-      updateBubble();
-      if(typeof renderAdminSession === 'function') renderAdminSession();
-    }
-
-    function getVisibleTicketsForProfile(){
-      const profile = getProfile();
-      if(!profile || !profile.ign) return [];
-      return getTickets().filter(ticket => ticket.ign === profile.ign);
-    }
-
-    function updateBubble(){
-      const count = getVisibleTicketsForProfile().filter(ticket => ticket.status !== 'Solved').length;
-      ticketBubbleCount.textContent = count;
-    }
-
-    updateBubble();
-
-    ticketForm.addEventListener('submit', e => {
-      e.preventDefault();
-
-      const profile = getProfile();
-      if(!profile || !profile.ign){
-        closeModal(ticketModal);
-        showLoginToast();
-        goPage('home');
-        return;
-      }
-
-      const data = Object.fromEntries(new FormData(ticketForm));
-
-      const ticket = {
-        id:'BOLT-' + Date.now().toString().slice(-7),
-        type:currentType,
-        ign:profile.ign,
-        discord:data.discord || 'Not provided',
-        order:currentType === 'Store Support' ? data.order : '',
-        attachment:ticketAttachment.files && ticketAttachment.files[0] ? ticketAttachment.files[0].name : '',
-        explain:data.explain,
-        proof:data.proof,
-        status:'Pending',
-        response:'No staff response yet.',
-        created:new Date().toLocaleString()
-      };
-
-      const tickets = getTickets();
-      tickets.unshift(ticket);
-      saveTickets(tickets);
-
-      ticketForm.reset();
-      document.getElementById('ticketIgn').value = profile.ign;
-      attachmentLabel.textContent = 'ATTACH FILE / SCREENSHOT';
-      updateTicketFields();
-
-      ticketForm.classList.add('hidden');
-      ticketSuccess.classList.remove('hidden');
-
-      const emailBody = [
-        `Ticket ID: ${ticket.id}`,
-        `Type: ${ticket.type}`,
-        `IGN: ${ticket.ign}`,
-        `Discord Tag: ${ticket.discord}`,
-        `Order ID: ${ticket.order || '-'}`,
-        `Problem: ${ticket.explain}`,
-        `Attachment Selected: ${ticket.attachment || 'No file selected'}`,
-        `Proof Link / Extra: ${ticket.proof || '-'}`
-      ].join('\n');
-
-      window.open(
-        `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`BoltPvP Ticket ${ticket.id} - ${ticket.type}`)}&body=${encodeURIComponent(emailBody)}`,
-        '_blank'
-      );
-    });
-
-    function statusClass(status){
-      if(status === 'Solved') return 'solved';
-      if(status === 'Answered') return 'answered';
-      return 'pending';
-    }
-
-    function rowClass(status){
-      return status === 'Solved' ? 'solved-row' : 'unsolved-row';
-    }
-
-    function ticketSummaryHTML(ticket){
-      const statusLabel = ticket.status === 'Solved' ? 'SOLVED' : 'NOT SOLVED';
-      const solvedBy = ticket.solvedBy ? `${ticket.solvedBy.ign} • ${ticket.solvedBy.rank}` : '-';
-      return `
-        <div class="ticket-summary-grid">
-          <div><strong>Player Name</strong><span>${escapeHtml(ticket.ign)}</span></div>
-          <div><strong>Type of Problem</strong><span>${escapeHtml(ticket.type)}</span></div>
-          <div><strong>Date of Submission</strong><span>${escapeHtml(ticket.created)}</span></div>
-          <div><strong>Solved By</strong><span>${escapeHtml(solvedBy)}</span></div>
-          <div><span class="status ${statusClass(ticket.status)}">${statusLabel}</span></div>
-        </div>
-      `;
-    }
-
-    function showHistory(){
-      const profile = getProfile();
-
-      if(!profile || !profile.ign){
-        showLoginToast();
-        return;
-      }
-
-      const box = document.getElementById('ticketHistory');
-      const tickets = getVisibleTicketsForProfile();
-
-      box.innerHTML = tickets.length ? '' : '<p>No tickets yet.</p>';
-
-      tickets.forEach(ticket => {
-        const row = document.createElement('div');
-        row.className = `ticket-row ticket-clickable ${rowClass(ticket.status)}`;
-        row.innerHTML = ticketSummaryHTML(ticket);
-
-        row.addEventListener('click', () => {
-          closeModal(document.getElementById('historyModal'));
-          openTicketDetails(ticket.id, 'history');
+          grid.appendChild(card);
         });
 
-        box.appendChild(row);
+        staffList.appendChild(block);
       });
-
-      openModal(document.getElementById('historyModal'));
-    }
-
-    document.getElementById('ticketBubble').onclick = showHistory;
-    document.getElementById('closeHistory').onclick = () => closeModal(document.getElementById('historyModal'));
-
-    function openTicketDetails(ticketId, backTarget = 'home'){
-      const ticket = getTickets().find(t => t.id === ticketId);
-
-      if(!ticket){
-        alert('Ticket not found');
-        return;
-      }
-
-      detailBackTarget = backTarget;
-      document.getElementById('detailTicketTitle').textContent = ticket.id;
-      document.getElementById('detailIgn').textContent = ticket.ign || '-';
-      document.getElementById('detailType').textContent = ticket.type || '-';
-      document.getElementById('detailDiscord').textContent = ticket.discord || 'Not provided';
-      document.getElementById('detailStatus').textContent = ticket.status === 'Solved' ? 'Solved' : 'Not Solved';
-      document.getElementById('detailCreated').textContent = ticket.created || '-';
-      document.getElementById('detailOrder').textContent = ticket.order || '-';
-      document.getElementById('detailProblem').textContent = ticket.explain || '-';
-
-      const proofText = [
-        ticket.attachment ? `Attachment: ${ticket.attachment}` : '',
-        ticket.proof ? `Proof / Extra: ${ticket.proof}` : ''
-      ].filter(Boolean).join(' | ');
-
-      document.getElementById('detailProof').textContent = proofText || '-';
-      document.getElementById('detailResponse').textContent = ticket.response || 'No staff response yet.';
-      goPage('ticketDetailsPage');
-    }
-
-    document.getElementById('backToTickets').addEventListener('click', () => {
-      if(detailBackTarget === 'history'){
-        showHistory();
-      }else{
-        goPage('home');
-      }
-    });
-
-
-    // ---------- Updates / threads + admin account system ----------
-    function normalizeName(name){
-      return String(name || '').trim().toLowerCase();
-    }
-
-    function isOwnerPlayerLoggedIn(){
-      const profile = getProfile();
-      return !!profile && normalizeName(profile.ign) === normalizeName(OWNER_IGN);
-    }
-
-    function isOwnerSession(){
-      return !!(activeAdmin && activeAdmin.owner);
-    }
-
-    function getAdmins(){
-      const admins = JSON.parse(localStorage.getItem('boltpvpAdmins') || 'null') || {};
-
-      // Clean/migrate old admin data so created admins can always login correctly.
-      Object.keys(admins).forEach(name => {
-        const info = admins[name] || {};
-        info.password = String(info.password ?? info.pass ?? '').trim();
-        info.rank = info.rank || (info.owner ? 'Owner' : 'Admin');
-        info.owner = info.rank === 'Owner' || !!info.owner;
-        info.created = info.created || new Date().toLocaleString();
-        admins[name] = info;
-      });
-
-      // Always keep the owner account working.
-      const ownerKey = Object.keys(admins).find(name => normalizeName(name) === normalizeName(OWNER_IGN));
-      if(!ownerKey){
-        admins[OWNER_IGN] = {password:'boltpvp12', owner:true, rank:'Owner', created:new Date().toLocaleString()};
-      }else{
-        admins[ownerKey].password = String(admins[ownerKey].password || 'boltpvp12').trim();
-        admins[ownerKey].owner = true;
-        admins[ownerKey].rank = 'Owner';
-      }
-
-      localStorage.setItem('boltpvpAdmins', JSON.stringify(admins));
-      return admins;
-    }
-
-    function saveAdmins(admins){
-      localStorage.setItem('boltpvpAdmins', JSON.stringify(admins));
-    }
-
-    function getUpdates(){
-      return JSON.parse(localStorage.getItem('boltpvpUpdates') || '[]');
     }
 
     function getUpdateImages(update){
@@ -2430,63 +2435,43 @@
       return [];
     }
 
-    function saveUpdates(updates){
-      localStorage.setItem('boltpvpUpdates', JSON.stringify(updates));
-      renderUpdates();
-    }
-
-    function seedUpdates(){
-      const updates = getUpdates();
-
-      if(updates.length) return;
-
-      saveUpdates([
-        {
-          id:'UPD-' + Date.now().toString().slice(-7),
-          title:'Welcome to BoltPvP',
-          desc:'The official BoltPvP website is live. Check tickets, staff, Discord, and new update threads here.',
-          image:'',
-          author:'ZenZboy',
-          created:new Date().toLocaleString(),
-          pinned:true,
-          reactions:{'🔥':0,'❤️':0,'😂':0,'😮':0,'👍':0},
-          reactedBy:{},
-          comments:[]
-        }
-      ]);
-    }
-
     function canPostUpdates(){
-      return !!activeAdmin;
+      return !!activeAdmin && !!getAdminToken();
     }
 
-    function getPosterName(){
-      return activeAdmin && activeAdmin.ign ? activeAdmin.ign : 'Admin';
+    function canPinUpdates(){
+      return !!(activeAdmin && activeAdmin.rank === 'Owner' && getAdminToken());
+    }
+
+    function canManageAdmins(){
+      return !!activeAdmin && !!getAdminToken() && ['Owner','Executive'].includes(activeAdmin.rank || (activeAdmin.owner ? 'Owner' : 'Admin'));
     }
 
     function canEditUpdate(update){
       if(!update) return false;
       if(canPinUpdates()) return true;
-      const poster = normalizeName(update.author);
-      return !!activeAdmin && normalizeName(activeAdmin.ign) === poster;
+      return !!activeAdmin && normalizeName(activeAdmin.ign) === normalizeName(update.author);
     }
 
-    function canPinUpdates(){
-      return !!(activeAdmin && activeAdmin.rank === 'Owner');
-    }
-
-    function canManageAdmins(){
-      return !!activeAdmin && ['Owner','Executive'].includes(activeAdmin.rank || (activeAdmin.owner ? 'Owner' : 'Admin'));
+    async function loadUpdates(){
+      try{
+        const data = await api('/api/updates');
+        updatesCache = data.updates || [];
+      }catch(error){
+        showAuthToast(error.message, 'DATABASE ERROR');
+        updatesCache = [];
+      }
+      renderUpdates();
     }
 
     function renderUpdates(){
       const list = document.getElementById('updatesList');
       if(!list) return;
 
-      const updates = getUpdates().sort((a,b) => {
+      const updates = [...updatesCache].sort((a,b) => {
         if(a.pinned && !b.pinned) return -1;
         if(!a.pinned && b.pinned) return 1;
-        return String(b.id).localeCompare(String(a.id));
+        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       });
 
       list.innerHTML = updates.length ? '' : '<p>No updates posted yet.</p>';
@@ -2497,8 +2482,7 @@
         const card = document.createElement('article');
         card.className = `update-card ${update.pinned ? 'pinned' : ''}`;
 
-        const shortDesc = update.desc.length > 135 ? update.desc.slice(0,135) + '...' : update.desc;
-
+        const shortDesc = (update.desc || '').length > 135 ? update.desc.slice(0,135) + '...' : update.desc || '';
         const imgs = getUpdateImages(update);
         card.innerHTML = `
           <div class="update-card-inner">
@@ -2507,12 +2491,12 @@
               <h2>${escapeHtml(update.title)}</h2>
               <p>${escapeHtml(shortDesc)}</p>
               <div class="update-meta">
-                <span>Posted by ${escapeHtml(update.author)}</span>
-                <span>${escapeHtml(update.created)}</span>
+                <span>POSTED BY ${escapeHtml(update.author || 'Admin')}</span>
+                <span>${escapeHtml(update.createdAt ? new Date(update.createdAt).toLocaleString() : '')}</span>
               </div>
             </div>
             <div class="update-card-image-slot ${imgs.length ? '' : 'empty'}">
-              ${imgs[0] ? `<img src="${imgs[0]}" alt="Update image">` : '<span class="plus-preview-symbol">+</span>'}
+              ${imgs.length ? `<img src="${imgs[0]}" alt="Update image">` : '<div class="plus-preview-symbol">+</div>'}
               ${imgs.length > 1 ? `<span class="more-images-badge">+${imgs.length - 1}</span>` : ''}
             </div>
           </div>
@@ -2523,210 +2507,341 @@
       });
     }
 
+    function replaceUpdateInCache(update){
+      const index = updatesCache.findIndex(u => u.id === update.id);
+      if(index >= 0) updatesCache[index] = update;
+      else updatesCache.unshift(update);
+      renderUpdates();
+    }
+
     function openUpdate(updateId){
-      const updates = getUpdates();
-      const update = updates.find(u => u.id === updateId);
+      const update = updatesCache.find(u => u.id === updateId);
       if(!update) return;
 
-      const profile = getProfile();
-      const currentName = activeAdmin?.ign || profile?.ign || 'Guest';
-      const detail = document.getElementById('updateDetailView');
-      const reactionEntries = Object.entries(update.reactions || {'🔥':0,'❤️':0,'😂':0,'😮':0,'👍':0});
+      const view = document.getElementById('updateDetailView');
+      const images = getUpdateImages(update);
+      const reactions = update.reactions || {};
+      const comments = update.comments || [];
 
-      detail.innerHTML = `
-        <span class="tag dark-tag">${update.pinned ? 'PINNED UPDATE' : 'SERVER UPDATE'}</span>
+      view.innerHTML = `
+        <span class="pin-label">${update.pinned ? 'PINNED' : 'THREAD'}</span>
         <h2>${escapeHtml(update.title)}</h2>
-        <p><b>Posted by:</b> ${escapeHtml(update.author)} • <b>Date:</b> ${escapeHtml(update.created)}${update.editedAt ? ' • <b>Edited:</b> ' + escapeHtml(update.editedAt) : ''}</p>
-        ${getUpdateImages(update).length ? `
+        <p>${escapeHtml(update.desc)}</p>
+
+        ${images.length ? `
           <div class="update-detail-gallery">
-            ${getUpdateImages(update).map(src => `<img src="${src}" alt="Update image">`).join('')}
+            ${images.map(img => `<img src="${img}" alt="Update image">`).join('')}
           </div>
         ` : ''}
 
-        <div class="ticket-detail-box">
-          <h3>Description</h3>
-          <p>${escapeHtml(update.desc)}</p>
+        <div class="update-meta">
+          <span>POSTED BY ${escapeHtml(update.author || 'Admin')}</span>
+          <span>${escapeHtml(update.createdAt ? new Date(update.createdAt).toLocaleString() : '')}</span>
         </div>
 
-        <h2>React</h2>
         <div class="reaction-row">
-          ${reactionEntries.map(([emoji,count]) => `<button class="reaction-btn" data-emoji="${emoji}">${emoji} ${count}</button>`).join('')}
+          ${['🔥','❤️','😂','😮','👍'].map(emoji => `<button class="reaction-btn" data-emoji="${emoji}">${emoji} ${reactions[emoji] || 0}</button>`).join('')}
         </div>
 
-        <h2>Comments</h2>
-        <textarea id="commentInput" placeholder="${profile || activeAdmin ? 'Write a comment...' : 'Login to comment'}" ${profile || activeAdmin ? '' : 'disabled'}></textarea>
-        <button class="cut-btn blue full" id="postCommentBtn" ${profile || activeAdmin ? '' : 'disabled'}>POST COMMENT</button>
+        <div class="solve-row">
+          ${canEditUpdate(update) ? `<button class="mini-btn" id="editThreadBtn">EDIT THREAD</button>` : ''}
+          ${canPinUpdates() ? `<button class="mini-btn pin-btn ${update.pinned ? 'active-pin' : ''}" id="pinThreadBtn">${update.pinned ? 'UNPIN' : 'PIN'}</button>` : ''}
+          ${canPinUpdates() ? `<button class="mini-btn danger-btn" id="deleteThreadBtn">DELETE</button>` : ''}
+        </div>
 
+        <h2>COMMENTS</h2>
         <div class="comment-list">
-          ${(update.comments || []).map(c => `
+          ${comments.length ? comments.map(c => `
             <div class="comment-card">
-              <strong>${escapeHtml(c.author)}</strong>
-              <span>${escapeHtml(c.created)}</span>
-              <p>${escapeHtml(c.text)}</p>
+              <strong>${escapeHtml(c.author || 'Player')}</strong>
+              <span>${escapeHtml(c.createdAt ? new Date(c.createdAt).toLocaleString() : '')}</span>
+              <p>${escapeHtml(c.body || '')}</p>
             </div>
-          `).join('') || '<p>No comments yet.</p>'}
+          `).join('') : '<p>No comments yet.</p>'}
         </div>
 
-        ${(canEditUpdate(update) || canPinUpdates()) ? `
-          <div class="solve-row">
-            ${canEditUpdate(update) ? '<button class="mini-btn" id="editUpdateBtn">EDIT THREAD</button>' : ''}
-            ${canPinUpdates() ? `<button class="mini-btn pin-btn ${update.pinned ? 'active-pin' : ''}" id="pinUpdateBtn">${update.pinned ? 'UNPIN UPDATE' : 'PIN UPDATE'}</button>` : ''}
-            ${canPinUpdates() ? '<button class="mini-btn danger-btn" id="deleteUpdateBtn">DELETE UPDATE</button>' : ''}
-          </div>
-        ` : ''}
+        <div class="admin-reply">
+          <textarea id="commentInput" placeholder="Leave a comment..."></textarea>
+          <button class="mini-btn" id="sendCommentBtn">COMMENT</button>
+        </div>
       `;
 
-      detail.querySelectorAll('.reaction-btn').forEach(btn => {
-        btn.onclick = () => {
-          const emoji = btn.dataset.emoji;
-          const reactor = currentName;
-          update.reactedBy = update.reactedBy || {};
-          update.reactions = update.reactions || {};
+      view.querySelectorAll('.reaction-btn').forEach(btn => {
+        btn.onclick = async () => {
+          try{
+            const token = getPlayerToken() || getAdminToken();
+            if(!token){
+              showAuthToast('Login required to react.', 'LOGIN NEEDED');
+              return;
+            }
 
-          const key = normalizeName(reactor);
-          if(update.reactedBy[key]){
-            const old = update.reactedBy[key];
-            update.reactions[old] = Math.max((update.reactions[old] || 1) - 1, 0);
+            const data = await api('/api/updates', {
+              method:'POST',
+              token,
+              body:{action:'react', id:update.id, emoji:btn.dataset.emoji}
+            });
+            replaceUpdateInCache(data.update);
+            openUpdate(update.id);
+          }catch(error){
+            showAuthToast(error.message, 'ERROR');
           }
-
-          update.reactedBy[key] = emoji;
-          update.reactions[emoji] = (update.reactions[emoji] || 0) + 1;
-          saveUpdates(updates);
-          openUpdate(update.id);
         };
       });
 
-      const postCommentBtn = document.getElementById('postCommentBtn');
-      if(postCommentBtn){
-        postCommentBtn.onclick = () => {
-          const text = document.getElementById('commentInput').value.trim();
-          if(!text) return;
+      const sendCommentBtn = document.getElementById('sendCommentBtn');
+      if(sendCommentBtn){
+        sendCommentBtn.onclick = async () => {
+          const comment = document.getElementById('commentInput').value.trim();
+          if(!comment) return;
 
-          update.comments = update.comments || [];
-          update.comments.unshift({
-            author:currentName,
-            text,
-            created:new Date().toLocaleString()
-          });
-
-          saveUpdates(updates);
-          openUpdate(update.id);
-        };
-      }
-
-      const editBtn = document.getElementById('editUpdateBtn');
-      if(editBtn){
-        editBtn.onclick = () => {
-          closeModal(document.getElementById('updateModal'));
-          openPostUpdate(update.id);
-        };
-      }
-
-      const pinBtn = document.getElementById('pinUpdateBtn');
-      if(pinBtn){
-        pinBtn.onclick = () => {
-          update.pinned = !update.pinned;
-          saveUpdates(updates);
-          openUpdate(update.id);
-        };
-      }
-
-      const deleteBtn = document.getElementById('deleteUpdateBtn');
-      if(deleteBtn){
-        deleteBtn.onclick = () => {
-          askConfirm(
-            'DELETE UPDATE',
-            'Are you sure you want to delete this update? This cannot be undone.',
-            'DELETE',
-            () => {
-              saveUpdates(updates.filter(u => u.id !== update.id));
-              closeModal(document.getElementById('updateModal'));
+          try{
+            const token = getPlayerToken() || getAdminToken();
+            if(!token){
+              showAuthToast('Login required to comment.', 'LOGIN NEEDED');
+              return;
             }
-          );
+
+            const data = await api('/api/updates', {
+              method:'POST',
+              token,
+              body:{action:'comment', id:update.id, comment}
+            });
+            replaceUpdateInCache(data.update);
+            openUpdate(update.id);
+          }catch(error){
+            showAuthToast(error.message, 'ERROR');
+          }
         };
       }
+
+      const editBtn = document.getElementById('editThreadBtn');
+      if(editBtn) editBtn.onclick = () => openPostUpdate(update.id);
+
+      const pinBtn = document.getElementById('pinThreadBtn');
+      if(pinBtn) pinBtn.onclick = async () => {
+        try{
+          const data = await api('/api/updates', {
+            method:'POST',
+            token:getAdminToken(),
+            body:{action:'pin', id:update.id}
+          });
+          replaceUpdateInCache(data.update);
+          openUpdate(update.id);
+        }catch(error){
+          showAuthToast(error.message, 'ERROR');
+        }
+      };
+
+      const deleteBtn = document.getElementById('deleteThreadBtn');
+      if(deleteBtn) deleteBtn.onclick = async () => {
+        const ok = await askConfirm('DELETE THREAD', 'Are you sure you want to delete this update?', 'DELETE');
+        if(!ok) return;
+
+        try{
+          await api('/api/updates', {
+            method:'POST',
+            token:getAdminToken(),
+            body:{action:'delete', id:update.id}
+          });
+          updatesCache = updatesCache.filter(u => u.id !== update.id);
+          renderUpdates();
+          closeModal(document.getElementById('updateModal'));
+          showCopyToast('THREAD DELETED', 'The update was removed.');
+        }catch(error){
+          showAuthToast(error.message, 'ERROR');
+        }
+      };
 
       openModal(document.getElementById('updateModal'));
     }
 
-    let editingUpdateId = null;
+    document.getElementById('closeUpdateModal').onclick = () => closeModal(document.getElementById('updateModal'));
+
+    async function compressImage(file, maxSize = 1200, quality = .78){
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      return await new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+      });
+    }
+
+    async function handleUpdateImages(files){
+      const imageFiles = [...files].filter(file => file.type.startsWith('image/'));
+      if(!imageFiles.length) return;
+
+      for(const file of imageFiles){
+        if(updateImageData.length >= 5){
+          showAuthToast('Maximum 5 images allowed.', 'IMAGE LIMIT');
+          break;
+        }
+        const dataUrl = await compressImage(file);
+        updateImageData.push(dataUrl);
+      }
+
+      renderUpdateImagePreviews();
+    }
+
+    function renderUpdateImagePreviews(){
+      const label = document.getElementById('updateImageLabel');
+      const list = document.getElementById('updateImagePreviewList');
+      const hint = document.getElementById('updateImageHint');
+
+      label.textContent = updateImageData.length ? `${updateImageData.length} IMAGE(S) ADDED` : 'ADD IMAGES OPTIONAL';
+      hint.classList.toggle('hidden', updateImageData.length === 0);
+      list.innerHTML = '';
+
+      updateImageData.forEach((src, index) => {
+        const card = document.createElement('div');
+        card.className = 'image-preview-card';
+        card.innerHTML = `
+          <img src="${src}" alt="Preview image">
+          <button class="remove-image-arrow" type="button" title="Remove image">➜</button>
+        `;
+        card.querySelector('button').onclick = () => {
+          updateImageData.splice(index, 1);
+          renderUpdateImagePreviews();
+        };
+        list.appendChild(card);
+      });
+    }
+
+    document.getElementById('updateImageInput').addEventListener('change', async e => {
+      await handleUpdateImages(e.target.files || []);
+      e.target.value = '';
+    });
 
     function openPostUpdate(editId = null){
-      // IMPORTANT: normal post buttons pass a click event by default. If that happens,
-      // force create-post mode so it can NEVER become edit mode by accident.
-      if(editId && typeof editId !== 'string'){
-        editId = null;
+      if(editId && typeof editId !== 'string') editId = null;
+
+      if(!canPostUpdates()){
+        showAuthToast('Admin login required to post updates.');
+        return;
       }
 
       const titleInput = document.getElementById('updateTitleInput');
       const descInput = document.getElementById('updateDescInput');
       const modalTitle = document.getElementById('createUpdateTitle');
       const submitBtn = document.getElementById('realPostThreadBtn');
-      const authToastEl = document.getElementById('authToast');
-      if(authToastEl) authToastEl.classList.remove('show');
 
-      // Always clear old edit mode first. Only a valid edit button can set it again.
       editingUpdateId = null;
+      titleInput.value = '';
+      descInput.value = '';
+      updateImageData = [];
 
       if(editId){
-        const update = getUpdates().find(u => u.id === editId);
+        const update = updatesCache.find(u => u.id === editId);
         if(!update || !canEditUpdate(update)){
           showAuthToast('Only the poster or Owner can edit this thread.');
           return;
         }
+
         editingUpdateId = editId;
         titleInput.value = update.title || '';
         descInput.value = update.desc || '';
         updateImageData = [...getUpdateImages(update)];
-        modalTitle.textContent = 'EDIT THREAD';
+        modalTitle.textContent = 'EDIT UPDATE';
         submitBtn.textContent = 'SAVE THREAD';
       }else{
-        if(!canPostUpdates()){
-          showAuthToast('Admin login required to post updates.');
-          return;
-        }
-        document.getElementById('createUpdateForm').reset();
-        updateImageData = [];
         modalTitle.textContent = 'POST UPDATE';
         submitBtn.textContent = 'POST THREAD';
       }
 
-      updateImageLabel.textContent = updateImageData.length ? `${updateImageData.length} IMAGE(S) ADDED` : 'ADD IMAGES OPTIONAL';
       renderUpdateImagePreviews();
       openModal(document.getElementById('createUpdateModal'));
     }
 
+    async function postUpdateThread(){
+      const title = document.getElementById('updateTitleInput').value.trim();
+      const desc = document.getElementById('updateDescInput').value.trim();
+
+      if(!title || !desc){
+        showAuthToast('Title and description required.', 'POST ERROR');
+        return;
+      }
+
+      if(!canPostUpdates()){
+        showAuthToast('Admin login required to post updates.');
+        return;
+      }
+
+      try{
+        const data = await api('/api/updates', {
+          method:'POST',
+          token:getAdminToken(),
+          body:{
+            action:editingUpdateId ? 'edit' : 'create',
+            id:editingUpdateId,
+            title,
+            desc,
+            images:updateImageData
+          }
+        });
+
+        replaceUpdateInCache(data.update);
+        document.getElementById('createUpdateForm').reset();
+        updateImageData = [];
+        editingUpdateId = null;
+        renderUpdateImagePreviews();
+        closeModal(document.getElementById('createUpdateModal'));
+        goPage('updates');
+        showCopyToast('THREAD SAVED', 'Update thread saved to MongoDB.');
+      }catch(error){
+        showAuthToast(error.message, 'POST ERROR');
+      }
+    }
+
+    document.getElementById('realPostThreadBtn').onclick = postUpdateThread;
+    document.getElementById('createUpdateForm').onsubmit = e => {
+      e.preventDefault();
+      postUpdateThread();
+    };
+    document.getElementById('closeCreateUpdate').onclick = () => closeModal(document.getElementById('createUpdateModal'));
+    document.getElementById('updatesPostBtn').onclick = () => openPostUpdate();
+
     function renderAdminSession(){
       const plus = document.getElementById('adminPlusBubble');
       const bar = document.getElementById('adminProfileBar');
-
-      if(activeAdmin && !activeAdmin.rank){
-        activeAdmin.rank = activeAdmin.owner ? 'Owner' : 'Admin';
-        localStorage.setItem('boltpvpActiveAdmin', JSON.stringify(activeAdmin));
-      }
-
-      if(plus){
-        plus.classList.toggle('show', canManageAdmins());
-      }
-
       const postBtn = document.getElementById('updatesPostBtn');
+
+      if(plus) plus.classList.toggle('show', canManageAdmins());
       if(postBtn) postBtn.classList.toggle('hidden', !canPostUpdates());
 
       if(bar && activeAdmin){
         bar.innerHTML = `
           <div>
             <strong>Logged in as Admin</strong>
-            <span>${escapeHtml(activeAdmin.ign)} • ${escapeHtml(activeAdmin.rank || (activeAdmin.owner ? 'Owner' : 'Admin'))}</span>
+            <span>${escapeHtml(activeAdmin.ign)} • ${escapeHtml(activeAdmin.rank || 'Admin')}</span>
           </div>
           <button class="mini-btn alt" id="adminLogoutBtn">LOG OUT</button>
         `;
 
-        document.getElementById('adminLogoutBtn').onclick = () => {
+        document.getElementById('adminLogoutBtn').onclick = async () => {
+          try{
+            if(getAdminToken()){
+              await api('/api/admins', {method:'POST', body:{action:'logout', token:getAdminToken()}});
+            }
+          }catch{}
           activeAdmin = null;
-          localStorage.removeItem('boltpvpActiveAdmin');
-          adminPanel.classList.add('hidden');
-          adminLoginBox.classList.remove('hidden');
-          adminTicketDetails.classList.add('hidden');
+          localStorage.removeItem(TOKEN_KEYS.admin);
+          localStorage.removeItem(TOKEN_KEYS.adminProfile);
+          document.getElementById('adminPanel').classList.add('hidden');
+          document.getElementById('adminLoginBox').classList.remove('hidden');
           renderAdminSession();
         };
       }else if(bar){
@@ -2734,196 +2849,221 @@
       }
     }
 
-    function renderAdminsList(){
-      const list = document.getElementById('adminsList');
-      const admins = getAdmins();
-      const entries = Object.entries(admins);
-
-      list.innerHTML = entries.map(([ign,info]) => `
-        <div class="admin-list-card" data-admin="${escapeHtml(ign)}">
-          <div>
-            <strong>${escapeHtml(ign)}</strong>
-            <span class="status ${info.owner || info.rank === 'Owner' ? 'solved' : 'answered'}">${escapeHtml(info.rank || (info.owner ? 'Owner' : 'Admin'))}</span>
-          </div>
-
-          <div class="password-pill">
-            <span class="pass-text" data-real="${escapeHtml(info.password)}">••••••</span>
-            <button class="eye-btn" title="Show password">👁️</button>
-          </div>
-
-          ${info.owner || info.rank === 'Owner' ? '<span class="status solved">LOCKED</span>' : '<button class="mini-btn danger-btn remove-admin-btn">REMOVE</button>'}
-        </div>
-      `).join('');
-
-      list.querySelectorAll('.eye-btn').forEach(btn => {
-        btn.onclick = () => {
-          const pass = btn.parentElement.querySelector('.pass-text');
-          const showing = pass.textContent !== '••••••';
-          pass.textContent = showing ? '••••••' : pass.dataset.real;
-        };
-      });
-
-      list.querySelectorAll('.remove-admin-btn').forEach(btn => {
-        btn.onclick = () => {
-          const card = btn.closest('.admin-list-card');
-          const name = card.dataset.admin;
-          askConfirm(
-            'REMOVE ADMIN',
-            'Remove admin ' + name + '?',
-            'REMOVE',
-            () => {
-              const admins = getAdmins();
-              delete admins[name];
-              saveAdmins(admins);
-              renderAdminsList();
-            }
-          );
-        };
-      });
+    function saveActiveAdmin(token, admin){
+      activeAdmin = {
+        ign:admin.ign || admin.username,
+        username:admin.username,
+        rank:admin.rank || 'Admin',
+        owner:!!admin.owner
+      };
+      localStorage.setItem(TOKEN_KEYS.admin, token);
+      localStorage.setItem(TOKEN_KEYS.adminProfile, JSON.stringify(activeAdmin));
     }
 
-    seedUpdates();
-    renderUpdates();
+    async function openAdminModalFinal(){
+      const adminModal = document.getElementById('adminModal');
+      openModal(adminModal);
 
-
-    const adminModal = document.getElementById('adminModal');
-    const adminPanel = document.getElementById('adminPanel');
-    const adminLoginBox = document.getElementById('adminLoginBox');
-    const adminTicketDetails = document.getElementById('adminTicketDetails');
-    const adminTicketDetailContent = document.getElementById('adminTicketDetailContent');
-
-    document.getElementById('closeUpdateModal').onclick = () => closeModal(document.getElementById('updateModal'));
-    document.getElementById('closeCreateUpdate').onclick = () => { editingUpdateId = null; closeModal(document.getElementById('createUpdateModal')); };
-
-    let updateImageData = [];
-    const updateImageInput = document.getElementById('updateImageInput');
-    const updateImageLabel = document.getElementById('updateImageLabel');
-    const updateImagePreviewList = document.getElementById('updateImagePreviewList');
-
-    function renderUpdateImagePreviews(){
-      if(!updateImagePreviewList) return;
-      const hint = document.getElementById('updateImageHint');
-      if(hint) hint.classList.toggle('hidden', updateImageData.length === 0);
-
-      updateImagePreviewList.innerHTML = updateImageData.map((src,index) => `
-        <div class="image-preview-card">
-          <img src="${src}" alt="Selected update image">
-          <button type="button" class="remove-image-arrow" data-index="${index}" title="Remove image">➜</button>
-        </div>
-      `).join('');
-
-      updateImagePreviewList.querySelectorAll('.remove-image-arrow').forEach(btn => {
-        btn.onclick = () => {
-          const index = Number(btn.dataset.index);
-          updateImageData.splice(index,1);
-          updateImageLabel.textContent = updateImageData.length ? `${updateImageData.length} IMAGE(S) ADDED` : 'ADD IMAGES OPTIONAL';
-          renderUpdateImagePreviews();
-        };
-      });
-    }
-
-    updateImageInput.onchange = () => {
-      const files = Array.from(updateImageInput.files || []);
-
-      if(!files.length){
-        updateImageLabel.textContent = updateImageData.length ? `${updateImageData.length} IMAGE(S) ADDED` : 'ADD IMAGES OPTIONAL';
-        return;
-      }
-
-      let loaded = 0;
-
-      files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          updateImageData.push(reader.result);
-          loaded += 1;
-
-          if(loaded === files.length){
-            updateImageLabel.textContent = updateImageData.length ? `${updateImageData.length} IMAGE(S) ADDED` : 'ADD IMAGES OPTIONAL';
-            renderUpdateImagePreviews();
-            updateImageInput.value = '';
-          }
-        };
-        reader.readAsDataURL(file);
-      });
-    };
-
-    function postUpdateThread(){
-      // Separate create permission from edit permission.
-      // This stops normal posting from being blocked by the edit-only check.
-      if(editingUpdateId){
-        const currentUpdate = getUpdates().find(u => u.id === editingUpdateId);
-        if(!currentUpdate || !canEditUpdate(currentUpdate)){
-          editingUpdateId = null;
-          showAuthToast('Only the poster or Owner can edit this thread.');
-          return;
-        }
-      }else if(!canPostUpdates()){
-        showAuthToast('Admin login required to post updates.');
-        return;
-      }
-
-      const title = document.getElementById('updateTitleInput').value.trim();
-      const desc = document.getElementById('updateDescInput').value.trim();
-
-      if(!title || !desc){
-        showAuthToast('Add a title and description first.');
-        return;
-      }
-
-      const updates = getUpdates();
-
-      if(editingUpdateId){
-        const index = updates.findIndex(u => u.id === editingUpdateId);
-        if(index === -1 || !canEditUpdate(updates[index])){
-          showAuthToast('Only the poster or Owner can edit this thread.');
-          return;
-        }
-        updates[index].title = title;
-        updates[index].desc = desc;
-        updates[index].images = [...updateImageData];
-        updates[index].image = updateImageData[0] || '';
-        updates[index].editedAt = new Date().toLocaleString();
+      if(activeAdmin && getAdminToken()){
+        document.getElementById('adminLoginBox').classList.add('hidden');
+        document.getElementById('adminPanel').classList.remove('hidden');
+        document.getElementById('adminTicketDetails').classList.add('hidden');
+        renderAdminSession();
+        await renderAdmin();
       }else{
-        updates.unshift({
-          id:'UPD-' + Date.now().toString().slice(-7),
-          title,
-          desc,
-          images:[...updateImageData],
-          image:updateImageData[0] || '',
-          author:getPosterName(),
-          created:new Date().toLocaleString(),
-          pinned:false,
-          reactions:{'🔥':0,'❤️':0,'😂':0,'😮':0,'👍':0},
-          reactedBy:{},
-          comments:[]
-        });
+        document.getElementById('adminLoginBox').classList.remove('hidden');
+        document.getElementById('adminPanel').classList.add('hidden');
+        document.getElementById('adminTicketDetails').classList.add('hidden');
+      }
+    }
+
+    document.getElementById('adminOpen').onclick = openAdminModalFinal;
+    document.getElementById('floatingAdminBtn').onclick = openAdminModalFinal;
+    document.getElementById('closeAdmin').onclick = () => closeModal(document.getElementById('adminModal'));
+
+    document.getElementById('adminLoginBtn').onclick = async () => {
+      const username = document.getElementById('adminUser').value.trim();
+      const password = document.getElementById('adminPass').value.trim();
+
+      if(!username || !password){
+        showAuthToast('Enter admin username and password.');
+        return;
       }
 
       try{
-        saveUpdates(updates);
-      }catch(err){
-        showAuthToast('Images are too large. Remove some images or use smaller files.');
+        const data = await api('/api/admins', {
+          method:'POST',
+          body:{action:'login', ign:username, password}
+        });
+
+        saveActiveAdmin(data.token, data.admin);
+        document.getElementById('adminPass').value = '';
+        document.getElementById('adminLoginBox').classList.add('hidden');
+        document.getElementById('adminPanel').classList.remove('hidden');
+        document.getElementById('adminTicketDetails').classList.add('hidden');
+
+        renderAdminSession();
+        await renderAdmin();
+      }catch(error){
+        showAuthToast(error.message);
+      }
+    };
+
+    document.getElementById('adminPostUpdateBtn').onclick = () => openPostUpdate();
+    document.getElementById('adminRefreshTicketsBtn').onclick = () => renderAdmin();
+
+    document.querySelectorAll('.admin-tab').forEach(tab => {
+      tab.onclick = () => {
+        adminFilter = tab.dataset.filter;
+        document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t === tab));
+        renderAdmin();
+      };
+    });
+
+    async function renderAdmin(){
+      const wrap = document.getElementById('adminTickets');
+      if(!wrap) return;
+
+      if(!getAdminToken()){
+        wrap.innerHTML = '<p>Admin login required.</p>';
         return;
       }
 
-      document.getElementById('createUpdateForm').reset();
-      updateImageData = [];
-      editingUpdateId = null;
-      updateImageLabel.textContent = 'ADD IMAGES OPTIONAL';
-      document.getElementById('createUpdateTitle').textContent = 'POST UPDATE';
-      document.getElementById('realPostThreadBtn').textContent = 'POST THREAD';
-      renderUpdateImagePreviews();
-      closeModal(document.getElementById('createUpdateModal'));
-      goPage('updates');
-      showCopyToast('Thread saved successfully.');
+      try{
+        const data = await api('/api/tickets', {token:getAdminToken()});
+        adminTicketsCache = data.tickets || [];
+      }catch(error){
+        wrap.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+        return;
+      }
+
+      const filtered = adminTicketsCache.filter(ticket => {
+        if(adminFilter === 'all') return true;
+        if(adminFilter === 'solved') return statusClass(ticket.status) === 'solved';
+        return statusClass(ticket.status) !== 'solved';
+      });
+
+      wrap.innerHTML = filtered.length ? '' : '<p>No tickets in this tab.</p>';
+
+      filtered.forEach(ticket => {
+        const row = document.createElement('div');
+        row.className = `ticket-row ticket-clickable ${rowClass(ticket.status)}`;
+        row.innerHTML = ticketSummaryHTML(ticket);
+        row.onclick = () => openAdminTicketDetails(ticket.id);
+        wrap.appendChild(row);
+      });
     }
 
-    document.getElementById('realPostThreadBtn').onclick = postUpdateThread;
+    function openAdminTicketDetails(ticketId){
+      const ticket = adminTicketsCache.find(t => t.id === ticketId);
+      if(!ticket){
+        showAuthToast('Ticket not found.', 'ERROR');
+        return;
+      }
 
-    document.getElementById('createUpdateForm').onsubmit = e => {
-      e.preventDefault();
-      postUpdateThread();
+      const adminPanel = document.getElementById('adminPanel');
+      const adminTicketDetails = document.getElementById('adminTicketDetails');
+      const adminTicketDetailContent = document.getElementById('adminTicketDetailContent');
+
+      adminPanel.classList.add('hidden');
+      adminTicketDetails.classList.remove('hidden');
+
+      adminTicketDetailContent.innerHTML = `
+        <div class="ticket-detail-card">
+          <span class="tag dark-tag">ADMIN TICKET VIEW</span>
+          <h1>${escapeHtml(ticketDisplayId(ticket))}</h1>
+
+          <div class="ticket-detail-grid">
+            <div><h3>Player Name</h3><p>${escapeHtml(ticket.ign || '-')}</p></div>
+            <div><h3>Type of Problem</h3><p>${escapeHtml(ticket.type || '-')}</p></div>
+            <div><h3>Date of Submission</h3><p>${escapeHtml(ticketCreated(ticket))}</p></div>
+            <div><h3>Status</h3><p>${statusClass(ticket.status) === 'solved' ? 'Solved' : 'Not Solved'}</p></div>
+            <div><h3>Solved By</h3><p>${ticket.solvedBy ? escapeHtml(ticket.solvedBy.ign + ' • ' + ticket.solvedBy.rank) : '-'}</p></div>
+            <div><h3>Discord</h3><p>${escapeHtml(ticket.discord || 'Not provided')}</p></div>
+            <div><h3>Order ID</h3><p>${escapeHtml(ticket.order || '-')}</p></div>
+          </div>
+
+          <div class="ticket-detail-box">
+            <h3>Player Problem</h3>
+            <p>${escapeHtml(ticket.explain || '-')}</p>
+          </div>
+
+          <div class="ticket-detail-box">
+            <h3>Attachment / Proof</h3>
+            <p>${escapeHtml(ticket.attachmentName || ticket.attachment || '-')}</p>
+          </div>
+
+          <div class="ticket-detail-box staff-answer-box">
+            <h3>Current Staff Response</h3>
+            <p>${escapeHtml(ticket.response || 'No staff response yet.')}</p>
+          </div>
+
+          <div class="admin-reply">
+            <textarea id="adminResponseText" placeholder="Write a staff response...">${ticket.response ? escapeHtml(ticket.response) : ''}</textarea>
+            <button class="mini-btn" id="saveAdminResponse">RESPOND</button>
+          </div>
+
+          <div class="solve-row">
+            <button class="mini-btn solve-btn" id="markSolved">MARK SOLVED</button>
+            <button class="mini-btn unsolve-btn" id="markUnsolved">MARK NOT SOLVED</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('saveAdminResponse').onclick = async () => {
+        const response = document.getElementById('adminResponseText').value.trim() || 'No staff response yet.';
+        try{
+          const data = await api('/api/tickets', {
+            method:'POST',
+            token:getAdminToken(),
+            body:{action:'reply', id:ticket.id, response}
+          });
+          replaceTicketInAdminCache(data.ticket);
+          openAdminTicketDetails(ticket.id);
+        }catch(error){
+          showAuthToast(error.message, 'ERROR');
+        }
+      };
+
+      document.getElementById('markSolved').onclick = async () => {
+        try{
+          const data = await api('/api/tickets', {
+            method:'POST',
+            token:getAdminToken(),
+            body:{action:'solve', id:ticket.id}
+          });
+          replaceTicketInAdminCache(data.ticket);
+          openAdminTicketDetails(ticket.id);
+        }catch(error){
+          showAuthToast(error.message, 'ERROR');
+        }
+      };
+
+      document.getElementById('markUnsolved').onclick = async () => {
+        try{
+          const data = await api('/api/tickets', {
+            method:'POST',
+            token:getAdminToken(),
+            body:{action:'unsolve', id:ticket.id}
+          });
+          replaceTicketInAdminCache(data.ticket);
+          openAdminTicketDetails(ticket.id);
+        }catch(error){
+          showAuthToast(error.message, 'ERROR');
+        }
+      };
+    }
+
+    function replaceTicketInAdminCache(ticket){
+      const index = adminTicketsCache.findIndex(t => t.id === ticket.id);
+      if(index >= 0) adminTicketsCache[index] = ticket;
+      else adminTicketsCache.unshift(ticket);
+    }
+
+    document.getElementById('adminBackToList').onclick = () => {
+      document.getElementById('adminTicketDetails').classList.add('hidden');
+      document.getElementById('adminPanel').classList.remove('hidden');
+      renderAdmin();
     };
 
     document.getElementById('adminPlusBubble').onclick = () => {
@@ -2947,15 +3087,15 @@
       renderAdminsList();
     };
 
-    document.getElementById('addAdminBtn').onclick = () => {
-      const ign = document.getElementById('newAdminIgn').value.trim();
-      const password = document.getElementById('newAdminPass').value.trim();
-      const rank = document.getElementById('newAdminRank').value;
-
+    document.getElementById('addAdminBtn').onclick = async () => {
       if(!canManageAdmins()){
         showAuthToast('Admin login required: Owner or Executive rank needed.');
         return;
       }
+
+      const ign = document.getElementById('newAdminIgn').value.trim();
+      const password = document.getElementById('newAdminPass').value.trim();
+      const rank = document.getElementById('newAdminRank').value;
 
       if(rank === 'Owner' && !(activeAdmin && activeAdmin.rank === 'Owner')){
         showAuthToast('Only Owner admin can create another Owner.');
@@ -2967,207 +3107,84 @@
         return;
       }
 
-      const admins = getAdmins();
-      const oldKey = Object.keys(admins).find(name => normalizeName(name) === normalizeName(ign));
-      if(oldKey && oldKey !== ign) delete admins[oldKey];
-
-      admins[ign] = {
-        password:String(password).trim(),
-        owner:rank === 'Owner',
-        rank,
-        created:new Date().toLocaleString()
-      };
-
-      saveAdmins(admins);
-      document.getElementById('newAdminIgn').value = '';
-      document.getElementById('newAdminPass').value = '';
-      document.getElementById('newAdminRank').value = 'Helper';
-      document.getElementById('addAdminBox').classList.add('hidden');
-      document.getElementById('removeAdminBox').classList.remove('hidden');
-      renderAdminsList();
-    };
-
-    function openAdminModalFinal(){
-      openModal(adminModal);
-      if(activeAdmin){
-        adminLoginBox.classList.add('hidden');
-        adminPanel.classList.remove('hidden');
-        adminTicketDetails.classList.add('hidden');
-        document.getElementById('adminPass').value = '';
-        renderAdminSession();
-        renderAdmin();
-      }
-    }
-
-    document.getElementById('adminOpen').onclick = openAdminModalFinal;
-    document.getElementById('floatingAdminBtn').onclick = openAdminModalFinal;
-    document.getElementById('closeAdmin').onclick = () => closeModal(adminModal);
-
-    document.getElementById('adminLoginBtn').onclick = () => {
-      const usernameRaw = document.getElementById('adminUser').value.trim();
-      const username = normalizeName(usernameRaw);
-      const password = document.getElementById('adminPass').value.trim();
-      const admins = getAdmins();
-
-      const matchedName = Object.keys(admins).find(name => normalizeName(name) === username);
-      const adminInfo = matchedName ? admins[matchedName] : null;
-      const savedPassword = adminInfo ? String(adminInfo.password ?? adminInfo.pass ?? '').trim() : '';
-
-      if(adminInfo && savedPassword === password){
-        activeAdmin = {
-          ign:matchedName,
-          owner:!!adminInfo.owner || adminInfo.rank === 'Owner',
-          rank:adminInfo.rank || (adminInfo.owner ? 'Owner' : 'Admin')
-        };
-
-        localStorage.setItem('boltpvpActiveAdmin', JSON.stringify(activeAdmin));
-
-        adminLoginBox.classList.add('hidden');
-        adminPanel.classList.remove('hidden');
-        adminTicketDetails.classList.add('hidden');
-
-        renderAdminSession();
-        renderAdmin();
-      }else{
-        showAuthToast(adminInfo ? 'Wrong admin password.' : 'Admin account not found.');
-      }
-    };
-
-    document.getElementById('adminPostUpdateBtn').onclick = () => openPostUpdate();
-    document.getElementById('updatesPostBtn').onclick = () => openPostUpdate();
-    document.getElementById('adminRefreshTicketsBtn').onclick = renderAdmin;
-    renderAdminSession();
-
-    document.querySelectorAll('.admin-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        adminFilter = tab.dataset.filter;
-        document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t === tab));
-        renderAdmin();
-      });
-    });
-
-    document.getElementById('adminBackToList').onclick = () => {
-      adminTicketDetails.classList.add('hidden');
-      adminPanel.classList.remove('hidden');
-      renderAdmin();
-    };
-
-    function renderAdmin(){
-      const wrap = document.getElementById('adminTickets');
-      const tickets = getTickets();
-
-      const filtered = tickets.filter(ticket => {
-        if(adminFilter === 'all') return true;
-        if(adminFilter === 'solved') return ticket.status === 'Solved';
-        return ticket.status !== 'Solved';
-      });
-
-      wrap.innerHTML = filtered.length ? '' : '<p>No tickets in this tab.</p>';
-
-      filtered.forEach(ticket => {
-        const row = document.createElement('div');
-        row.className = `ticket-row ticket-clickable ${rowClass(ticket.status)}`;
-        row.innerHTML = ticketSummaryHTML(ticket);
-
-        row.addEventListener('click', () => {
-          openAdminTicketDetails(ticket.id);
+      try{
+        await api('/api/admins', {
+          method:'POST',
+          token:getAdminToken(),
+          body:{action:'add', ign, password, rank}
         });
 
-        wrap.appendChild(row);
-      });
-    }
+        document.getElementById('newAdminIgn').value = '';
+        document.getElementById('newAdminPass').value = '';
+        document.getElementById('newAdminRank').value = 'Helper';
+        document.getElementById('addAdminBox').classList.add('hidden');
+        document.getElementById('removeAdminBox').classList.remove('hidden');
+        await renderAdminsList();
+        showCopyToast('ADMIN SAVED', `${ign} can now login from any browser.`);
+      }catch(error){
+        showAuthToast(error.message, 'ADMIN ERROR');
+      }
+    };
 
-    function openAdminTicketDetails(ticketId){
-      const tickets = getTickets();
-      const ticket = tickets.find(t => t.id === ticketId);
+    async function renderAdminsList(){
+      const wrap = document.getElementById('adminsList');
+      if(!wrap) return;
 
-      if(!ticket){
-        alert('Ticket not found');
+      if(!canManageAdmins()){
+        wrap.innerHTML = '<p>Owner or Executive admin login required.</p>';
         return;
       }
 
-      adminPanel.classList.add('hidden');
-      adminTicketDetails.classList.remove('hidden');
+      try{
+        const data = await api('/api/admins', {token:getAdminToken()});
+        const admins = data.admins || [];
 
-      adminTicketDetailContent.innerHTML = `
-        <div class="ticket-detail-card">
-          <span class="tag dark-tag">ADMIN TICKET VIEW</span>
-          <h1>${escapeHtml(ticket.id)}</h1>
+        wrap.innerHTML = admins.length ? '' : '<p>No admins found.</p>';
 
-          <div class="ticket-detail-grid">
-            <div><h3>Player Name</h3><p>${escapeHtml(ticket.ign)}</p></div>
-            <div><h3>Type of Problem</h3><p>${escapeHtml(ticket.type)}</p></div>
-            <div><h3>Date of Submission</h3><p>${escapeHtml(ticket.created)}</p></div>
-            <div><h3>Status</h3><p>${ticket.status === 'Solved' ? 'Solved' : 'Not Solved'}</p></div>
-            <div><h3>Solved By</h3><p>${ticket.solvedBy ? escapeHtml(ticket.solvedBy.ign + ' • ' + ticket.solvedBy.rank) : '-'}</p></div>
-            <div><h3>Discord</h3><p>${escapeHtml(ticket.discord || 'Not provided')}</p></div>
-            <div><h3>Order ID</h3><p>${escapeHtml(ticket.order || '-')}</p></div>
-          </div>
+        admins.forEach(admin => {
+          const isLocked = admin.owner && normalizeName(admin.ign) === normalizeName(OWNER_IGN);
+          const card = document.createElement('div');
+          card.className = 'admin-list-card';
+          card.innerHTML = `
+            <strong>${escapeHtml(admin.ign)}</strong>
+            <span class="status solved">${escapeHtml(admin.rank || 'Admin')}</span>
+            <span class="password-pill">SECURE IN MONGODB</span>
+            ${isLocked ? '<span class="status solved">LOCKED</span>' : '<button class="mini-btn danger-btn">REMOVE</button>'}
+          `;
 
-          <div class="ticket-detail-box">
-            <h3>Player Problem</h3>
-            <p>${escapeHtml(ticket.explain || '-')}</p>
-          </div>
+          const removeBtn = card.querySelector('button');
+          if(removeBtn){
+            removeBtn.onclick = async () => {
+              const ok = await askConfirm('REMOVE ADMIN', `Remove ${admin.ign}?`, 'REMOVE');
+              if(!ok) return;
 
-          <div class="ticket-detail-box">
-            <h3>Attachment / Proof</h3>
-            <p>${escapeHtml(ticket.attachment || '-')}${ticket.proof ? ' | ' + escapeHtml(ticket.proof) : ''}</p>
-          </div>
+              try{
+                await api('/api/admins', {
+                  method:'POST',
+                  token:getAdminToken(),
+                  body:{action:'remove', ign:admin.ign}
+                });
+                await renderAdminsList();
+                showCopyToast('ADMIN REMOVED', `${admin.ign} was removed.`);
+              }catch(error){
+                showAuthToast(error.message, 'ADMIN ERROR');
+              }
+            };
+          }
 
-          <div class="ticket-detail-box staff-answer-box">
-            <h3>Current Staff Response</h3>
-            <p>${escapeHtml(ticket.response || 'No staff response yet.')}</p>
-          </div>
-
-          <div class="admin-reply">
-            <textarea id="adminResponseText" placeholder="Write a staff response...">${ticket.response === 'No staff response yet.' ? '' : escapeHtml(ticket.response)}</textarea>
-            <button class="mini-btn" id="saveAdminResponse">RESPOND</button>
-          </div>
-
-          <div class="solve-row">
-            <button class="mini-btn solve-btn" id="markSolved">MARK SOLVED</button>
-            <button class="mini-btn unsolve-btn" id="markUnsolved">MARK NOT SOLVED</button>
-          </div>
-        </div>
-      `;
-
-      document.getElementById('saveAdminResponse').onclick = () => {
-        ticket.response = document.getElementById('adminResponseText').value.trim() || 'No staff response yet.';
-        ticket.status = ticket.response === 'No staff response yet.' ? 'Pending' : 'Answered';
-        saveTickets(tickets);
-        openAdminTicketDetails(ticket.id);
-      };
-
-      document.getElementById('markSolved').onclick = () => {
-        if(ticket.response === 'No staff response yet.'){
-          ticket.response = 'Your ticket has been solved by staff.';
-        }
-        ticket.status = 'Solved';
-        ticket.solvedBy = {
-          ign: activeAdmin ? activeAdmin.ign : 'Admin',
-          rank: activeAdmin ? (activeAdmin.rank || (activeAdmin.owner ? 'Owner' : 'Admin')) : 'Admin'
-        };
-        saveTickets(tickets);
-        openAdminTicketDetails(ticket.id);
-      };
-
-      document.getElementById('markUnsolved').onclick = () => {
-        ticket.status = 'Pending';
-        delete ticket.solvedBy;
-        saveTickets(tickets);
-        openAdminTicketDetails(ticket.id);
-      };
+          wrap.appendChild(card);
+        });
+      }catch(error){
+        wrap.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+      }
     }
 
-    function escapeHtml(value=''){
-      return String(value).replace(/[&<>"']/g, char => ({
-        '&':'&amp;',
-        '<':'&lt;',
-        '>':'&gt;',
-        '"':'&quot;',
-        "'":'&#39;'
-      }[char]));
-    }
+    // Start
+    renderStaffs();
+    renderAdminSession();
+    loadSession();
+    loadUpdates();
+
   </script>
 </body>
 </html>
