@@ -1,26 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>BoltPvP | 1.8+ PvP Server</title>
+  <title>BoltPvP</title>
   <meta name="description" content="BoltPvP - #1 1.8+ PvP server. Join fast fights, updates, staff support, Discord, tickets, and a clean competitive Minecraft community.">
   <meta name="theme-color" content="#0ea5e9">
   <meta name="application-name" content="BoltPvP">
   <meta name="apple-mobile-web-app-title" content="BoltPvP">
 
   <!-- Browser tab logo -->
-  <link rel="icon" type="image/png" href="assets/boltlogo (1).png">
-  <link rel="shortcut icon" type="image/png" href="assets/boltlogo (1).png">
-  <link rel="apple-touch-icon" href="assets/boltlogo (1).png">
+  <link rel="icon" type="image/png" href="assets/bolt-logo.png">
+  <link rel="shortcut icon" type="image/png" href="assets/bolt-logo.png">
+  <link rel="apple-touch-icon" href="assets/bolt-logo.png">
 
   <!-- Discord / social link embed. No og:image, so no big logo/image shows in the embed. -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="BoltPvP">
-  <meta property="og:title" content="BoltPvP | 1.8+ PvP Server">
+  <meta property="og:title" content="BoltPvP | #1 1.8+ PvP Server">
   <meta property="og:description" content="BoltPvP is a clean, fast, competitive Minecraft 1.8+ PvP server with support tickets, staff, updates, Discord, and smooth gameplay.">
-  <meta property="og:url" content="https://boltpvp-website.vercel.app/">
+  <meta property="og:url" content="https://YOUR-VERCEL-LINK.vercel.app/">
 
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="BoltPvP | 1.8+ PvP Server">
+  <meta name="twitter:title" content="BoltPvP | #1 1.8+ PvP Server">
   <meta name="twitter:description" content="Clean fights, fast PvP, support tickets, staff, updates, and the BoltPvP community.">
 
   <meta charset="UTF-8" />
@@ -329,7 +329,7 @@
 
     .login-form{
       display:grid;
-      grid-template-columns:1fr 1fr auto;
+      grid-template-columns:1fr 1fr auto auto;
       gap:12px;
       align-items:center;
       transition:opacity .35s ease, transform .35s ease;
@@ -1418,15 +1418,16 @@
     <section id="home" class="page active">
       <section id="loginStrip" class="login-strip shell hover-card">
         <div class="login-copy">
-          <span class="tag">PLAYER LOGIN / SIGN UP</span>
+          <span class="tag">PLAYER LOGIN</span>
           <h2>ENTER YOUR ACCOUNT</h2>
-          <p>Use a username and password. If the username is new, it signs you up. After login, tickets are unlocked.</p>
+          <p>Login only works with the password used when the account was created. New players must click SIGN UP first.</p>
         </div>
 
         <form id="playerLoginForm" class="login-form">
           <input id="playerIgn" placeholder="USERNAME / IGN" maxlength="16" required>
           <input id="playerPass" type="password" placeholder="PASSWORD" required>
           <button class="cut-btn green" type="submit">LOGIN</button>
+          <button class="cut-btn blue" type="button" id="playerSignupBtn">SIGN UP</button>
         </form>
       </section>
 
@@ -1991,28 +1992,7 @@
       if (typeof renderAdminSession === 'function') renderAdminSession();
     }
 
-    playerForm.addEventListener('submit', e => {
-      e.preventDefault();
-
-      const ign = playerIgnInput.value.trim();
-      const password = playerPassInput.value;
-
-      if(!ign || !password) return;
-
-      const users = getUsers();
-
-      if(users[ign] && users[ign].password !== password){
-        showAuthToast('Wrong password or username. Try again.');
-        playerForm.style.transform = 'translateX(-8px)';
-        setTimeout(() => playerForm.style.transform = '', 180);
-        return;
-      }
-
-      if(!users[ign]){
-        users[ign] = {password, created:new Date().toLocaleString()};
-        saveUsers(users);
-      }
-
+    function finishPlayerLogin(ign){
       saveProfile({ign});
 
       playerForm.style.transform = 'scale(.97)';
@@ -2024,6 +2004,50 @@
         playerForm.style.opacity = '';
         playerPassInput.value = '';
       }, 250);
+    }
+
+    playerForm.addEventListener('submit', e => {
+      e.preventDefault();
+
+      const ign = playerIgnInput.value.trim();
+      const password = playerPassInput.value;
+
+      if(!ign || !password) return;
+
+      const users = getUsers();
+      const matchedName = Object.keys(users).find(name => normalizeName(name) === normalizeName(ign));
+      const user = matchedName ? users[matchedName] : null;
+
+      if(!user || user.password !== password){
+        showAuthToast(user ? 'Wrong password for this account.' : 'Account not found. Click SIGN UP first.');
+        playerForm.style.transform = 'translateX(-8px)';
+        setTimeout(() => playerForm.style.transform = '', 180);
+        return;
+      }
+
+      finishPlayerLogin(matchedName);
+    });
+
+    document.getElementById('playerSignupBtn').addEventListener('click', () => {
+      const ign = playerIgnInput.value.trim();
+      const password = playerPassInput.value;
+
+      if(!ign || !password){
+        showAuthToast('Enter username and password to sign up.');
+        return;
+      }
+
+      const users = getUsers();
+      const matchedName = Object.keys(users).find(name => normalizeName(name) === normalizeName(ign));
+
+      if(matchedName){
+        showAuthToast('Account already exists. Use LOGIN.');
+        return;
+      }
+
+      users[ign] = {password, created:new Date().toLocaleString()};
+      saveUsers(users);
+      finishPlayerLogin(ign);
     });
 
     renderProfile();
@@ -2362,19 +2386,30 @@
     }
 
     function isOwnerSession(){
-      return (activeAdmin && activeAdmin.owner) || isOwnerPlayerLoggedIn();
+      return !!(activeAdmin && activeAdmin.owner);
     }
 
     function getAdmins(){
       const admins = JSON.parse(localStorage.getItem('boltpvpAdmins') || 'null') || {};
 
-      // Always keep the owner account working, even if old localStorage data exists.
+      // Clean/migrate old admin data so created admins can always login correctly.
+      Object.keys(admins).forEach(name => {
+        const info = admins[name] || {};
+        info.password = String(info.password ?? info.pass ?? '').trim();
+        info.rank = info.rank || (info.owner ? 'Owner' : 'Admin');
+        info.owner = info.rank === 'Owner' || !!info.owner;
+        info.created = info.created || new Date().toLocaleString();
+        admins[name] = info;
+      });
+
+      // Always keep the owner account working.
       const ownerKey = Object.keys(admins).find(name => normalizeName(name) === normalizeName(OWNER_IGN));
       if(!ownerKey){
-        admins[OWNER_IGN] = {password:'boltpvp12', owner:true, created:new Date().toLocaleString()};
+        admins[OWNER_IGN] = {password:'boltpvp12', owner:true, rank:'Owner', created:new Date().toLocaleString()};
       }else{
-        admins[ownerKey].password = admins[ownerKey].password || 'boltpvp12';
+        admins[ownerKey].password = String(admins[ownerKey].password || 'boltpvp12').trim();
         admins[ownerKey].owner = true;
+        admins[ownerKey].rank = 'Owner';
       }
 
       localStorage.setItem('boltpvpAdmins', JSON.stringify(admins));
@@ -2422,30 +2457,25 @@
     }
 
     function canPostUpdates(){
-      return !!activeAdmin || isOwnerPlayerLoggedIn();
+      return !!activeAdmin;
     }
 
     function getPosterName(){
-      if(activeAdmin && activeAdmin.ign) return activeAdmin.ign;
-      const profile = getProfile();
-      return profile && profile.ign ? profile.ign : OWNER_IGN;
+      return activeAdmin && activeAdmin.ign ? activeAdmin.ign : 'Admin';
     }
 
     function canEditUpdate(update){
       if(!update) return false;
       if(canPinUpdates()) return true;
       const poster = normalizeName(update.author);
-      if(activeAdmin && normalizeName(activeAdmin.ign) === poster) return true;
-      const profile = getProfile();
-      return !!profile && normalizeName(profile.ign) === poster;
+      return !!activeAdmin && normalizeName(activeAdmin.ign) === poster;
     }
 
     function canPinUpdates(){
-      return (activeAdmin && activeAdmin.rank === 'Owner') || isOwnerPlayerLoggedIn();
+      return !!(activeAdmin && activeAdmin.rank === 'Owner');
     }
 
     function canManageAdmins(){
-      if(isOwnerPlayerLoggedIn()) return true;
       return !!activeAdmin && ['Owner','Executive'].includes(activeAdmin.rank || (activeAdmin.owner ? 'Owner' : 'Admin'));
     }
 
@@ -2652,7 +2682,7 @@
         submitBtn.textContent = 'SAVE THREAD';
       }else{
         if(!canPostUpdates()){
-          showAuthToast('Admin login needed to post updates.');
+          showAuthToast('Admin login required to post updates.');
           return;
         }
         document.getElementById('createUpdateForm').reset();
@@ -2669,6 +2699,11 @@
     function renderAdminSession(){
       const plus = document.getElementById('adminPlusBubble');
       const bar = document.getElementById('adminProfileBar');
+
+      if(activeAdmin && !activeAdmin.rank){
+        activeAdmin.rank = activeAdmin.owner ? 'Owner' : 'Admin';
+        localStorage.setItem('boltpvpActiveAdmin', JSON.stringify(activeAdmin));
+      }
 
       if(plus){
         plus.classList.toggle('show', canManageAdmins());
@@ -2824,7 +2859,7 @@
           return;
         }
       }else if(!canPostUpdates()){
-        showAuthToast('Admin login needed to post updates.');
+        showAuthToast('Admin login required to post updates.');
         return;
       }
 
@@ -2895,7 +2930,7 @@
       if(canManageAdmins()){
         openModal(document.getElementById('ownerToolsModal'));
       }else{
-        showAuthToast('Owner or Executive rank needed.');
+        showAuthToast('Admin login required: Owner or Executive rank needed.');
       }
     };
 
@@ -2918,12 +2953,12 @@
       const rank = document.getElementById('newAdminRank').value;
 
       if(!canManageAdmins()){
-        showAuthToast('Owner or Executive rank needed.');
+        showAuthToast('Admin login required: Owner or Executive rank needed.');
         return;
       }
 
-      if(rank === 'Owner' && !(activeAdmin && activeAdmin.rank === 'Owner') && !isOwnerPlayerLoggedIn()){
-        showAuthToast('Only Owner can create another Owner.');
+      if(rank === 'Owner' && !(activeAdmin && activeAdmin.rank === 'Owner')){
+        showAuthToast('Only Owner admin can create another Owner.');
         return;
       }
 
@@ -2933,8 +2968,11 @@
       }
 
       const admins = getAdmins();
+      const oldKey = Object.keys(admins).find(name => normalizeName(name) === normalizeName(ign));
+      if(oldKey && oldKey !== ign) delete admins[oldKey];
+
       admins[ign] = {
-        password,
+        password:String(password).trim(),
         owner:rank === 'Owner',
         rank,
         created:new Date().toLocaleString()
@@ -2955,6 +2993,7 @@
         adminLoginBox.classList.add('hidden');
         adminPanel.classList.remove('hidden');
         adminTicketDetails.classList.add('hidden');
+        document.getElementById('adminPass').value = '';
         renderAdminSession();
         renderAdmin();
       }
@@ -2967,13 +3006,14 @@
     document.getElementById('adminLoginBtn').onclick = () => {
       const usernameRaw = document.getElementById('adminUser').value.trim();
       const username = normalizeName(usernameRaw);
-      const password = document.getElementById('adminPass').value;
+      const password = document.getElementById('adminPass').value.trim();
       const admins = getAdmins();
 
       const matchedName = Object.keys(admins).find(name => normalizeName(name) === username);
       const adminInfo = matchedName ? admins[matchedName] : null;
+      const savedPassword = adminInfo ? String(adminInfo.password ?? adminInfo.pass ?? '').trim() : '';
 
-      if(adminInfo && adminInfo.password === password){
+      if(adminInfo && savedPassword === password){
         activeAdmin = {
           ign:matchedName,
           owner:!!adminInfo.owner || adminInfo.rank === 'Owner',
@@ -2989,7 +3029,7 @@
         renderAdminSession();
         renderAdmin();
       }else{
-        showAuthToast('Wrong admin username or password.');
+        showAuthToast(adminInfo ? 'Wrong admin password.' : 'Admin account not found.');
       }
     };
 
