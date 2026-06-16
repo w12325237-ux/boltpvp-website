@@ -1,3 +1,4 @@
+cat > /mnt/user-data/outputs/index.html << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -103,6 +104,72 @@
 
     .shell{width:min(1180px,calc(100% - 42px));margin:0 auto}
     .hidden{display:none!important}
+
+    /* ── SCROLL REVEAL ── */
+    .reveal{
+      opacity:0;
+      transform:translateY(40px) scale(0.97);
+      transition:opacity 0.75s cubic-bezier(.22,.61,.36,1), transform 0.75s cubic-bezier(.22,.61,.36,1);
+    }
+    .reveal.revealed{
+      opacity:1;
+      transform:translateY(0) scale(1);
+    }
+    .reveal-left{
+      opacity:0;
+      transform:translateX(-40px) scale(0.97);
+      transition:opacity 0.75s cubic-bezier(.22,.61,.36,1), transform 0.75s cubic-bezier(.22,.61,.36,1);
+    }
+    .reveal-left.revealed{
+      opacity:1;
+      transform:translateX(0) scale(1);
+    }
+    .reveal-right{
+      opacity:0;
+      transform:translateX(40px) scale(0.97);
+      transition:opacity 0.75s cubic-bezier(.22,.61,.36,1), transform 0.75s cubic-bezier(.22,.61,.36,1);
+    }
+    .reveal-right.revealed{
+      opacity:1;
+      transform:translateX(0) scale(1);
+    }
+    /* Staggered delay helpers */
+    .reveal-delay-1{transition-delay:0.1s}
+    .reveal-delay-2{transition-delay:0.2s}
+    .reveal-delay-3{transition-delay:0.3s}
+    .reveal-delay-4{transition-delay:0.4s}
+    .reveal-delay-5{transition-delay:0.5s}
+
+    /* ── LOADING SPINNER OVERLAY ── */
+    .btn-loading{
+      position:relative;
+      pointer-events:none;
+      color:transparent!important;
+    }
+    .btn-loading::after{
+      content:"";
+      position:absolute;
+      top:50%;left:50%;
+      width:22px;height:22px;
+      margin:-11px 0 0 -11px;
+      border-radius:50%;
+      border:3px solid rgba(255,255,255,0.3);
+      border-top-color:#fff;
+      animation:spinRing 0.7s linear infinite;
+    }
+    /* Gold buttons need dark spinner */
+    .btn-loading.gold::after{
+      border-color:rgba(4,17,31,0.2);
+      border-top-color:#04111f;
+    }
+    /* Green buttons */
+    .btn-loading.green::after{
+      border-color:rgba(2,44,30,0.2);
+      border-top-color:#022c1e;
+    }
+    @keyframes spinRing{
+      to{transform:rotate(360deg)}
+    }
 
     /* ── NAV ── */
     .site-header{
@@ -355,7 +422,40 @@
     .wide-logo-wrap:hover img{transform:translateY(-8px) scale(1.08)}
 
     /* ── SUPPORT ── */
-    .support-layout{padding:52px 0 84px;display:grid;grid-template-columns:1fr .86fr;gap:22px}
+    /* Top row: 2 columns (FAQ + Ticket) */
+    .support-top-row{
+      padding:52px 0 22px;
+      display:grid;
+      grid-template-columns:1fr .86fr;
+      gap:22px;
+    }
+    /* Bottom row: Application full width */
+    .support-bottom-row{
+      padding:0 0 84px;
+    }
+    /* Application panel full width horizontal */
+    .application-panel-wide{
+      padding:30px 36px;
+      background:linear-gradient(135deg,rgba(255,255,255,.88),rgba(230,255,245,.88));
+      clip-path:var(--clip);
+      box-shadow:var(--shadow);
+    }
+    .app-panel-inner{
+      display:grid;
+      grid-template-columns:1fr auto;
+      gap:24px;
+      align-items:center;
+    }
+    .app-panel-copy h2{
+      font-size:40px;color:#04111f;
+    }
+    .app-type-grid-wide{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:14px;
+      min-width:380px;
+    }
+
     .cut-panel{padding:30px}
     .cut-panel h2{font-size:40px;color:#04111f}
 
@@ -372,12 +472,7 @@
 
     .ticket-panel{display:flex;flex-direction:column;justify-content:center;background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(186,240,255,.88))}
 
-    /* ── APPLICATION PANEL ── */
-    .application-panel{
-      display:flex;flex-direction:column;justify-content:center;
-      background:linear-gradient(135deg,rgba(255,255,255,.88),rgba(230,255,245,.88));
-    }
-    .app-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+    /* ── APPLICATION BUTTON ── */
     .app-type-btn{
       min-height:110px;border:0;cursor:pointer;
       background:linear-gradient(135deg,rgba(255,255,255,.9),rgba(220,252,231,.85));
@@ -395,9 +490,6 @@
     }
     .app-type-btn.media-btn{background:linear-gradient(135deg,rgba(255,255,255,.9),rgba(219,234,254,.85))}
     .app-type-btn.media-btn:hover{background:linear-gradient(135deg,#fff,#bfdbfe)}
-
-    /* ── SUPPORT FULL LAYOUT (3 column on wide) ── */
-    .support-layout-3{padding:52px 0 84px;display:grid;grid-template-columns:1fr .7fr .7fr;gap:22px}
 
     /* ── STAFF ── */
     .staff-shell{padding:48px 0 82px}
@@ -826,7 +918,7 @@
     @media(max-width:1000px){
       .nav-wrap{grid-template-columns:repeat(6,1fr);gap:8px}
       .nav-link{min-height:54px;font-size:9px;letter-spacing:1px}
-      .login-strip,.cards-grid,.wide-panel,.support-layout,.support-layout-3{grid-template-columns:1fr}
+      .login-strip,.cards-grid,.wide-panel,.support-top-row,.support-bottom-row{grid-template-columns:1fr}
       .login-form{grid-template-columns:1fr}
       .hero-box{display:grid;gap:14px;padding:18px;min-height:auto}
       .floating-info{position:relative;top:auto;left:auto;right:auto;width:100%;transform:none}
@@ -836,9 +928,10 @@
       .ticket-summary-grid{grid-template-columns:1fr}
       .update-card-inner{grid-template-columns:1fr}
       .update-card-image-slot{min-height:180px}
-      .app-type-grid{grid-template-columns:1fr}
       .form-row-2{grid-template-columns:1fr}
       .app-action-grid{grid-template-columns:1fr 1fr}
+      .app-panel-inner{grid-template-columns:1fr}
+      .app-type-grid-wide{min-width:unset;grid-template-columns:1fr 1fr}
     }
 
     @media(max-width:720px){
@@ -852,6 +945,7 @@
       .type-grid{grid-template-columns:1fr}
       .admin-reply{flex-direction:column}
       .app-action-grid{grid-template-columns:1fr 1fr}
+      .app-type-grid-wide{grid-template-columns:1fr}
     }
   </style>
 </head>
@@ -901,7 +995,7 @@
   <main>
     <!-- ── HOME ── -->
     <section id="home" class="page active">
-      <section id="loginStrip" class="login-strip shell hover-card">
+      <section id="loginStrip" class="login-strip shell hover-card reveal">
         <div class="login-copy">
           <span class="tag">PLAYER LOGIN</span>
           <h2>ENTER YOUR ACCOUNT</h2>
@@ -917,7 +1011,7 @@
 
       <section class="hero shell">
         <div class="hero-box">
-          <div class="floating-info ip-card">
+          <div class="floating-info ip-card reveal reveal-left">
             <span class="badge gold-badge"><span class="online-dot"></span>321 ONLINE</span>
             <strong>BOLTPVP.FUN</strong>
             <small>Click to copy IP</small>
@@ -927,7 +1021,7 @@
             <img class="hero-logo" src="assets/bolt-logo.png" alt="BoltPvP Logo">
             <div class="eyebrow">BOLTPVP NETWORK</div>
           </div>
-          <a class="floating-info discord-card" href="https://discord.gg/boltpvp" target="_blank" rel="noreferrer">
+          <a class="floating-info discord-card reveal reveal-right" href="https://discord.gg/boltpvp" target="_blank" rel="noreferrer">
             <span class="badge gold-badge">COMMUNITY</span>
             <strong>DISCORD</strong>
             <small>Click to join server</small>
@@ -936,7 +1030,7 @@
       </section>
 
       <section class="cards-grid shell">
-        <article class="feature-card big-home-card hover-card">
+        <article class="feature-card big-home-card hover-card reveal">
           <div>
             <span class="tag dark-tag">BOLT PVP</span>
             <h2>PLAY BOLTPVP</h2>
@@ -949,14 +1043,14 @@
           <img class="card-character large" src="assets/player-yellow.png" alt="Minecraft player">
         </article>
 
-        <article class="feature-card yellow-card hover-card">
+        <article class="feature-card yellow-card hover-card reveal reveal-delay-1">
           <span class="tag">PVP ACTION</span>
           <h2>RANKED FIGHTS</h2>
           <p>Play ranked fights with quick access, clean visuals, smooth combat information, and a simple layout that feels fast on every page.</p>
           <img class="card-character" src="assets/player-red.png" alt="Minecraft fighter">
         </article>
 
-        <article class="feature-card discord-feature hover-card">
+        <article class="feature-card discord-feature hover-card reveal reveal-delay-2">
           <span class="tag">DISCORD HUB</span>
           <h2>CHAT & UPDATES</h2>
           <p>Join Discord for announcements, support, giveaways, community updates, and direct server news from the staff team.</p>
@@ -964,14 +1058,14 @@
           <img class="card-character" src="assets/player-pig.png" alt="Discord character">
         </article>
 
-        <article class="feature-card blue-card hover-card">
+        <article class="feature-card blue-card hover-card reveal reveal-delay-3">
           <span class="tag">UPDATES</span>
           <h2>THREADS</h2>
           <p>Open update threads, read pinned posts, react with emojis, leave comments, and follow everything new on the server.</p>
           <button class="mini-btn alt" data-page="updates">OPEN</button>
         </article>
 
-        <article class="feature-card blue-card hover-card">
+        <article class="feature-card blue-card hover-card reveal reveal-delay-4">
           <span class="tag">SUPPORT</span>
           <h2>TICKETS & APPLY</h2>
           <p>Create support tickets, apply for Staff or Media roles, and track all your applications with live status updates.</p>
@@ -979,7 +1073,7 @@
         </article>
       </section>
 
-      <section class="wide-panel shell hover-card">
+      <section class="wide-panel shell hover-card reveal">
         <div>
           <span class="tag dark-tag">WHY BOLTPVP</span>
           <h2>EVERYTHING IN ONE PLACE</h2>
@@ -993,8 +1087,9 @@
 
     <!-- ── SUPPORT ── -->
     <section id="support" class="page">
-      <div class="support-layout-3 shell">
-        <div class="faq-panel cut-panel hover-card">
+      <!-- TOP ROW: FAQ + CREATE TICKET side by side -->
+      <div class="support-top-row shell">
+        <div class="faq-panel cut-panel hover-card reveal reveal-left">
           <h2>FAQ</h2>
           <div class="faq-item open">
             <button>HOW CAN I REGISTER MY ACCOUNT?<span>⌄</span></button>
@@ -1014,34 +1109,41 @@
           </div>
           <div class="faq-item">
             <button>HOW DO I APPLY FOR STAFF?<span>⌄</span></button>
-            <p>Click <b>Apply for Staff</b> in the Applications panel on this page. You must be logged in.</p>
+            <p>Click <b>Apply for Staff</b> in the Applications panel below. You must be logged in.</p>
           </div>
           <div class="faq-item">
             <button>HOW DO I APPLY FOR MEDIA?<span>⌄</span></button>
-            <p>Click <b>Apply for Media</b> in the Applications panel. Include your channel or platform link.</p>
+            <p>Click <b>Apply for Media</b> in the Applications panel below. Include your channel or platform link.</p>
           </div>
         </div>
 
-        <div class="ticket-panel cut-panel hover-card">
+        <div class="ticket-panel cut-panel hover-card reveal reveal-right">
           <span class="tag dark-tag">SUPPORT</span>
           <h2>CREATE TICKET</h2>
           <p>You must be logged in to create a ticket. Your ticket history shows red for unsolved and green for solved.</p>
           <button class="cut-btn blue full" id="openTicketFlow">CREATE TICKET</button>
         </div>
+      </div>
 
-        <div class="application-panel cut-panel hover-card">
-          <span class="tag dark-tag">APPLY NOW</span>
-          <h2>APPLICATIONS</h2>
-          <p>Apply for a Staff or Media role. You must be logged in. Applications are reviewed by the admin team.</p>
-          <div class="app-type-grid">
-            <button class="app-type-btn" id="openStaffApp">
-              <span class="app-icon">⚔️</span>
-              APPLY FOR STAFF
-            </button>
-            <button class="app-type-btn media-btn" id="openMediaApp">
-              <span class="app-icon">🎬</span>
-              APPLY FOR MEDIA
-            </button>
+      <!-- BOTTOM ROW: APPLICATIONS full width -->
+      <div class="support-bottom-row shell">
+        <div class="application-panel-wide hover-card reveal">
+          <div class="app-panel-inner">
+            <div class="app-panel-copy">
+              <span class="tag dark-tag">APPLY NOW</span>
+              <h2 style="margin:8px 0 10px;font-family:'Baloo 2',cursive;line-height:.94;text-transform:uppercase;font-size:40px;color:#04111f">APPLICATIONS</h2>
+              <p style="font-size:14px;line-height:1.65;font-weight:800;color:#1e4a5e;margin:0">Apply for a Staff or Media role. You must be logged in. Applications are reviewed by the admin team. Staff applications require detailed scenario answers, so take your time and be honest.</p>
+            </div>
+            <div class="app-type-grid-wide">
+              <button class="app-type-btn" id="openStaffApp">
+                <span class="app-icon">⚔️</span>
+                APPLY FOR STAFF
+              </button>
+              <button class="app-type-btn media-btn" id="openMediaApp">
+                <span class="app-icon">🎬</span>
+                APPLY FOR MEDIA
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1050,7 +1152,7 @@
     <!-- ── UPDATES ── -->
     <section id="updates" class="page">
       <div class="updates-shell shell">
-        <div class="updates-head">
+        <div class="updates-head reveal">
           <span class="tag dark-tag">BOLTPVP THREADS</span>
           <h1>UPDATES</h1>
           <p>Read server news, react with emojis, and leave comments. Only admins can post updates, and only the owner can pin them.</p>
@@ -1064,7 +1166,7 @@
     <!-- ── STAFFS ── -->
     <section id="staffs" class="page">
       <div class="staff-shell shell">
-        <div class="staff-head">
+        <div class="staff-head reveal">
           <span class="tag dark-tag">BOLTPVP TEAM</span>
           <h1>STAFF</h1>
           <p>Owners, executives, managers, admins, and mods with clean role colors.</p>
@@ -1190,7 +1292,6 @@
           </div>
           <input name="country" placeholder="YOUR COUNTRY / REGION" required>
         </div>
-
         <div class="app-form-section">
           <h3>AVAILABILITY & EXPERIENCE</h3>
           <div class="form-row-2">
@@ -1199,25 +1300,21 @@
           </div>
           <textarea name="pastExperience" placeholder="PAST STAFF EXPERIENCE: List any previous servers you've staffed on, your rank, and how long you were there. Write NONE if you have no experience." required></textarea>
         </div>
-
         <div class="app-form-section">
           <h3>WHY YOU?</h3>
           <textarea name="whyYou" placeholder="WHY SHOULD WE PICK YOU? What makes you stand out from other applicants? Be specific and honest — minimum 3 sentences." required></textarea>
           <textarea name="whatBring" placeholder="WHAT WILL YOU BRING TO BOLTPVP? Skills, personality, ideas?" required></textarea>
         </div>
-
         <div class="app-form-section">
           <h3>SCENARIO QUESTIONS</h3>
           <textarea name="scenario1" placeholder="SCENARIO 1: A player is spamming racial slurs in chat. What do you do, step by step?" required></textarea>
           <textarea name="scenario2" placeholder="SCENARIO 2: You suspect a player is using a hack client but have no solid proof yet. What is your approach?" required></textarea>
         </div>
-
         <div class="app-form-section">
           <h3>SELF-REFLECTION</h3>
           <textarea name="weaknesses" placeholder="WHAT ARE YOUR WEAKNESSES AS A POTENTIAL STAFF MEMBER? Be honest — this is not a trick question." required></textarea>
           <textarea name="extra" placeholder="ANYTHING ELSE YOU WANT US TO KNOW? (Optional)"></textarea>
         </div>
-
         <button class="cut-btn gold full" type="submit" style="margin-top:18px">SUBMIT APPLICATION</button>
       </form>
 
@@ -1249,7 +1346,6 @@
             <input name="channelLink" placeholder="LINK TO YOUR CHANNEL / PROFILE" required>
           </div>
         </div>
-
         <div class="app-form-section">
           <h3>YOUR REACH</h3>
           <div class="form-row-2">
@@ -1258,19 +1354,16 @@
           </div>
           <textarea name="contentType" placeholder="WHAT TYPE OF CONTENT DO YOU MAKE? (PvP montages, commentary, streams, tutorials, etc.)" required></textarea>
         </div>
-
         <div class="app-form-section">
           <h3>PARTNERSHIP PROPOSAL</h3>
           <textarea name="whyPartner" placeholder="WHY DO YOU WANT TO PARTNER WITH BOLTPVP? What can you offer the server?" required></textarea>
           <textarea name="pastWork" placeholder="LINK YOUR BEST 2-3 VIDEOS / CONTENT PIECES below. Paste links one per line." required></textarea>
           <textarea name="schedule" placeholder="HOW OFTEN DO YOU PLAN TO UPLOAD / STREAM BOLTPVP CONTENT?" required></textarea>
         </div>
-
         <div class="app-form-section">
           <h3>EXTRA</h3>
           <textarea name="extra" placeholder="ANYTHING ELSE YOU WANT TO ADD? (Optional)"></textarea>
         </div>
-
         <button class="cut-btn gold full" type="submit" style="margin-top:18px">SUBMIT APPLICATION</button>
       </form>
 
@@ -1393,7 +1486,6 @@
           <button class="admin-tab" data-section="applications">APPLICATIONS</button>
         </div>
 
-        <!-- TICKETS SECTION -->
         <div id="adminTicketsSection">
           <h2>ADMIN TICKETS</h2>
           <p>Red means not solved. Green means solved. Click a ticket to see full details and respond.</p>
@@ -1405,7 +1497,6 @@
           <div id="adminTickets"></div>
         </div>
 
-        <!-- APPLICATIONS SECTION -->
         <div id="adminApplicationsSection" class="hidden">
           <h2>APPLICATIONS</h2>
           <p>Yellow = pending. Green = accepted. Red = rejected. Click to review and respond.</p>
@@ -1434,6 +1525,47 @@
   </div>
 
   <script>
+    /* ═══════════════════════════════════════════════════
+       SCROLL REVEAL (IntersectionObserver)
+    ═══════════════════════════════════════════════════ */
+    (function initReveal(){
+      const observer = new IntersectionObserver((entries)=>{
+        entries.forEach(entry=>{
+          if(entry.isIntersecting){
+            entry.target.classList.add('revealed');
+            observer.unobserve(entry.target);
+          }
+        });
+      },{threshold:0.1,rootMargin:'0px 0px -40px 0px'});
+
+      function observeAll(){
+        document.querySelectorAll('.reveal,.reveal-left,.reveal-right').forEach(el=>{
+          observer.observe(el);
+        });
+      }
+      observeAll();
+
+      // Re-observe when pages switch (elements get display:block)
+      window._revealObserver = observer;
+      window._observeReveal = observeAll;
+    })();
+
+    /* ═══════════════════════════════════════════════════
+       LOADING SPINNER on buttons
+    ═══════════════════════════════════════════════════ */
+    function setButtonLoading(btn, loading){
+      if(!btn) return;
+      if(loading){
+        btn.dataset.origText = btn.textContent;
+        btn.classList.add('btn-loading');
+        btn.disabled = true;
+      } else {
+        btn.classList.remove('btn-loading');
+        btn.disabled = false;
+        if(btn.dataset.origText) btn.textContent = btn.dataset.origText;
+      }
+    }
+
     /* ═══════════════════════════════════════════════════
        CONSTANTS
     ═══════════════════════════════════════════════════ */
@@ -1506,7 +1638,6 @@
           p.x += p.vx;
           p.y += p.vy;
           p.life--;
-
           const alpha = Math.min(p.life / (p.maxLife * .4), 1) * .6;
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -1514,7 +1645,6 @@
           ctx.shadowColor = `hsla(${p.hue}, 100%, 75%, .8)`;
           ctx.shadowBlur = 6;
           ctx.fill();
-
           if(p.life <= 0){
             const n = randomParticle();
             n.maxLife = n.life;
@@ -1657,6 +1787,8 @@
       if(id==='staffs') renderStaffs();
       if(id==='support') loadPlayerTickets();
       window.scrollTo({top:0,behavior:'smooth'});
+      // Re-trigger reveal observer on page switch
+      setTimeout(()=>{ if(window._observeReveal) window._observeReveal(); },50);
     }
 
     pageLinks.forEach(link=>{
@@ -1745,22 +1877,28 @@
       const ign=document.getElementById('playerIgn').value.trim();
       const password=document.getElementById('playerPass').value;
       if(!ign||!password) return;
+      const loginBtn=e.target.querySelector('button[type="submit"]');
+      setButtonLoading(loginBtn,true);
       try{
         const data=await api('/api/auth',{method:'POST',body:{action:'login',ign,password}});
         await finishPlayerLogin(data);
       }catch(error){
         showAuthToast(error.message.includes('not found')?'Account not found. Click SIGN UP first.':error.message);
+      }finally{
+        setButtonLoading(loginBtn,false);
       }
     });
 
-    document.getElementById('playerSignupBtn').addEventListener('click',async()=>{
+    document.getElementById('playerSignupBtn').addEventListener('click',async function(){
       const ign=document.getElementById('playerIgn').value.trim();
       const password=document.getElementById('playerPass').value;
       if(!ign||!password){showAuthToast('Enter username and password to sign up.');return}
+      setButtonLoading(this,true);
       try{
         const data=await api('/api/auth',{method:'POST',body:{action:'signup',ign,password}});
         await finishPlayerLogin(data);
       }catch(error){showAuthToast(error.message)}
+      finally{setButtonLoading(this,false)}
     });
 
     async function loadSession(){
@@ -1897,7 +2035,6 @@
         wrap.appendChild(row);
       });
 
-      // reset to tickets tab
       bubbleTab='tickets';
       document.getElementById('tabTickets').classList.add('active');
       document.getElementById('tabApplications').classList.remove('active');
@@ -1962,7 +2099,6 @@
       const status=appStatusClass(app.status);
       const answers=app.answers||{};
 
-      // Build answer list based on type
       let answerHTML='';
       const fields = app.type==='Media' ? [
         ['Discord Tag','discord'],['Platform','platform'],['Channel / Profile Link','channelLink'],
@@ -2082,6 +2218,8 @@
     ticketForm.addEventListener('submit',async e=>{
       e.preventDefault();
       if(!profile||!getPlayerToken()){closeModal(ticketModal);showLoginToast();goPage('home');return}
+      const submitBtn=e.target.querySelector('button[type="submit"]');
+      setButtonLoading(submitBtn,true);
       const data=Object.fromEntries(new FormData(ticketForm));
       const attachmentName=ticketAttachment.files&&ticketAttachment.files[0]?ticketAttachment.files[0].name:'';
       const fullExplain=[data.explain,data.proof?`\n\nProof / Extra Details: ${data.proof}`:''].join('\n');
@@ -2103,6 +2241,7 @@
         const emailBody=[`Ticket ID: ${ticket.ticketId||ticket.id}`,`Type: ${ticket.type}`,`IGN: ${ticket.ign}`,`Discord Tag: ${ticket.discord}`,`Order ID: ${ticket.order||'-'}`,`Problem: ${ticket.explain}`,`Attachment: ${ticket.attachmentName||'None'}`].join('\n');
         window.open(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`BoltPvP Ticket ${ticket.ticketId||ticket.id} - ${ticket.type}`)}&body=${encodeURIComponent(emailBody)}`,'_blank');
       }catch(error){showAuthToast(error.message,'TICKET ERROR')}
+      finally{setButtonLoading(submitBtn,false)}
     });
 
     /* ═══════════════════════════════════════════════════
@@ -2136,6 +2275,8 @@
     document.getElementById('staffAppForm').addEventListener('submit',async e=>{
       e.preventDefault();
       if(!profile||!getPlayerToken()){closeModal(document.getElementById('staffAppModal'));showLoginToast();return}
+      const submitBtn=e.target.querySelector('button[type="submit"]');
+      setButtonLoading(submitBtn,true);
       const fd=new FormData(document.getElementById('staffAppForm'));
       const answers=Object.fromEntries(fd);
       answers.ign=profile.ign;
@@ -2149,11 +2290,14 @@
         document.getElementById('staffAppForm').classList.add('hidden');
         document.getElementById('staffAppSuccess').classList.remove('hidden');
       }catch(error){showAuthToast(error.message,'APPLICATION ERROR')}
+      finally{setButtonLoading(submitBtn,false)}
     });
 
     document.getElementById('mediaAppForm').addEventListener('submit',async e=>{
       e.preventDefault();
       if(!profile||!getPlayerToken()){closeModal(document.getElementById('mediaAppModal'));showLoginToast();return}
+      const submitBtn=e.target.querySelector('button[type="submit"]');
+      setButtonLoading(submitBtn,true);
       const fd=new FormData(document.getElementById('mediaAppForm'));
       const answers=Object.fromEntries(fd);
       answers.ign=profile.ign;
@@ -2167,6 +2311,7 @@
         document.getElementById('mediaAppForm').classList.add('hidden');
         document.getElementById('mediaAppSuccess').classList.remove('hidden');
       }catch(error){showAuthToast(error.message,'APPLICATION ERROR')}
+      finally{setButtonLoading(submitBtn,false)}
     });
 
     /* ═══════════════════════════════════════════════════
@@ -2183,12 +2328,12 @@
       staffList.innerHTML='';
       Object.entries(staffs).forEach(([role,names],ri)=>{
         const block=document.createElement('section');
-        block.className=`role-block ${role}`;
+        block.className=`role-block ${role} reveal`;
         block.innerHTML=`<h2 class="role-title">${roleNames[role]}</h2><div class="staff-grid"></div>`;
         const grid=block.querySelector('.staff-grid');
         names.forEach((name,i)=>{
           const card=document.createElement('article');
-          card.className='staff-card hover-card';
+          card.className='staff-card hover-card reveal reveal-delay-'+((i%5)+1);
           card.innerHTML=`
             <img src="${customStaffSkins[name]||`https://visage.surgeplay.com/full/240/${encodeURIComponent(name)}`}" alt="${escapeHtml(name)} skin">
             <h3>${escapeHtml(name)}</h3>
@@ -2204,6 +2349,7 @@
         });
         staffList.appendChild(block);
       });
+      setTimeout(()=>{ if(window._observeReveal) window._observeReveal(); },50);
     }
 
     /* ═══════════════════════════════════════════════════
@@ -2236,9 +2382,9 @@
       list.innerHTML=updates.length?'':'<p>No updates posted yet.</p>';
       const noMore=document.getElementById('noMorePosts');
       if(noMore) noMore.classList.toggle('hidden',updates.length===0);
-      updates.forEach(update=>{
+      updates.forEach((update,idx)=>{
         const card=document.createElement('article');
-        card.className=`update-card ${update.pinned?'pinned':''}`;
+        card.className=`update-card ${update.pinned?'pinned':''} reveal reveal-delay-${(idx%5)+1}`;
         const shortDesc=(update.desc||'').length>135?update.desc.slice(0,135)+'...':update.desc||'';
         const imgs=getUpdateImages(update);
         card.innerHTML=`
@@ -2260,6 +2406,7 @@
         card.onclick=()=>openUpdate(update.id);
         list.appendChild(card);
       });
+      setTimeout(()=>{ if(window._observeReveal) window._observeReveal(); },50);
     }
 
     function replaceUpdateInCache(update){
@@ -2322,12 +2469,13 @@
         sendBtn.onclick=async()=>{
           const comment=document.getElementById('commentInput').value.trim();
           if(!comment) return;
+          setButtonLoading(sendBtn,true);
           try{
             const token=getPlayerToken()||getAdminToken();
-            if(!token){showAuthToast('Login required to comment.','LOGIN NEEDED');return}
+            if(!token){showAuthToast('Login required to comment.','LOGIN NEEDED');setButtonLoading(sendBtn,false);return}
             const data=await api('/api/updates',{method:'POST',token,body:{action:'comment',id:update.id,comment}});
             replaceUpdateInCache(data.update);openUpdate(update.id);
-          }catch(error){showAuthToast(error.message,'ERROR')}
+          }catch(error){showAuthToast(error.message,'ERROR');setButtonLoading(sendBtn,false)}
         };
       }
 
@@ -2431,6 +2579,8 @@
       const desc=document.getElementById('updateDescInput').value.trim();
       if(!title||!desc){showAuthToast('Title and description required.','POST ERROR');return}
       if(!canPostUpdates()){showAuthToast('Admin login required to post updates.');return}
+      const btn=document.getElementById('realPostThreadBtn');
+      setButtonLoading(btn,true);
       try{
         const data=await api('/api/updates',{method:'POST',token:getAdminToken(),body:{action:editingUpdateId?'edit':'create',id:editingUpdateId,title,desc,images:updateImageData}});
         replaceUpdateInCache(data.update);
@@ -2440,6 +2590,7 @@
         goPage('updates');
         showCopyToast('THREAD SAVED','Update thread saved to MongoDB.');
       }catch(error){showAuthToast(error.message,'POST ERROR')}
+      finally{setButtonLoading(btn,false)}
     }
 
     document.getElementById('realPostThreadBtn').onclick=postUpdateThread;
@@ -2502,10 +2653,11 @@
     document.getElementById('floatingAdminBtn').onclick=openAdminModalFinal;
     document.getElementById('closeAdmin').onclick=()=>closeModal(document.getElementById('adminModal'));
 
-    document.getElementById('adminLoginBtn').onclick=async()=>{
+    document.getElementById('adminLoginBtn').onclick=async function(){
       const username=document.getElementById('adminUser').value.trim();
       const password=document.getElementById('adminPass').value.trim();
       if(!username||!password){showAuthToast('Enter admin username and password.');return}
+      setButtonLoading(this,true);
       try{
         const data=await api('/api/admins',{method:'POST',body:{action:'login',ign:username,password}});
         saveActiveAdmin(data.token,data.admin);
@@ -2517,6 +2669,7 @@
         renderAdminSession();
         await renderAdmin();
       }catch(error){showAuthToast(error.message)}
+      finally{setButtonLoading(this,false)}
     };
 
     document.getElementById('adminPostUpdateBtn').onclick=()=>openPostUpdate();
@@ -2569,7 +2722,6 @@
       }
       renderAdminTicketList();
 
-      // Also load applications
       try{
         const data=await api('/api/applications',{token:getAdminToken(),headers:{}});
         adminApplicationsCache=data.applications||[];
@@ -2665,20 +2817,26 @@
           </div>
         </div>`;
 
-      document.getElementById('saveAdminResponse').onclick=async()=>{
+      document.getElementById('saveAdminResponse').onclick=async function(){
         const response=document.getElementById('adminResponseText').value.trim()||'No staff response yet.';
+        setButtonLoading(this,true);
         try{
           const data=await api('/api/tickets',{method:'POST',token:getAdminToken(),body:{action:'reply',id:ticket.id,response}});
           replaceTicketInAdminCache(data.ticket);openAdminTicketDetails(ticket.id);
         }catch(error){showAuthToast(error.message,'ERROR')}
+        finally{setButtonLoading(this,false)}
       };
-      document.getElementById('markSolved').onclick=async()=>{
+      document.getElementById('markSolved').onclick=async function(){
+        setButtonLoading(this,true);
         try{const data=await api('/api/tickets',{method:'POST',token:getAdminToken(),body:{action:'solve',id:ticket.id}});replaceTicketInAdminCache(data.ticket);openAdminTicketDetails(ticket.id)}
         catch(error){showAuthToast(error.message,'ERROR')}
+        finally{setButtonLoading(this,false)}
       };
-      document.getElementById('markUnsolved').onclick=async()=>{
+      document.getElementById('markUnsolved').onclick=async function(){
+        setButtonLoading(this,true);
         try{const data=await api('/api/tickets',{method:'POST',token:getAdminToken(),body:{action:'unsolve',id:ticket.id}});replaceTicketInAdminCache(data.ticket);openAdminTicketDetails(ticket.id)}
         catch(error){showAuthToast(error.message,'ERROR')}
+        finally{setButtonLoading(this,false)}
       };
     }
 
@@ -2728,7 +2886,6 @@
             <h3>CURRENT STAFF RESPONSE</h3>
             <p>${escapeHtml(app.staffReply||'No response yet.')}</p>
           </div>
-
           <h2 style="margin-top:22px;font-family:'Baloo 2',cursive;text-transform:uppercase">RESPOND TO APPLICATION</h2>
           <div class="app-action-grid">
             <button class="app-action-btn btn-accept" id="appAcceptBtn">✓ ACCEPT</button>
@@ -2742,28 +2899,33 @@
       const acceptMsg=`Congratulations! Your ${appType} Application has been ACCEPTED. Welcome to the BoltPvP team! Please check your Discord DMs for further instructions. We're excited to have you with us!`;
       const rejectMsg=`You are Not Capable For Being ${appType} At This Time. Please Apply After 1 Week. Keep improving and try again!`;
 
-      document.getElementById('appAcceptBtn').onclick=async()=>{
+      document.getElementById('appAcceptBtn').onclick=async function(){
         const ok=await askConfirm('ACCEPT APPLICATION',`Accept ${app.ign}'s ${appType} application?`,'ACCEPT');
         if(!ok) return;
+        setButtonLoading(this,true);
         await respondToApp(app,true,acceptMsg);
+        setButtonLoading(this,false);
       };
-
-      document.getElementById('appAcceptReasonBtn').onclick=async()=>{
+      document.getElementById('appAcceptReasonBtn').onclick=async function(){
         const reason=await askReason('ACCEPT WITH REASON',`Write a custom acceptance message for ${app.ign}.`);
         if(reason===null) return;
+        setButtonLoading(this,true);
         await respondToApp(app,true,reason||acceptMsg);
+        setButtonLoading(this,false);
       };
-
-      document.getElementById('appRejectBtn').onclick=async()=>{
+      document.getElementById('appRejectBtn').onclick=async function(){
         const ok=await askConfirm('REJECT APPLICATION',`Reject ${app.ign}'s ${appType} application?`,'REJECT');
         if(!ok) return;
+        setButtonLoading(this,true);
         await respondToApp(app,false,rejectMsg);
+        setButtonLoading(this,false);
       };
-
-      document.getElementById('appRejectReasonBtn').onclick=async()=>{
+      document.getElementById('appRejectReasonBtn').onclick=async function(){
         const reason=await askReason('REJECT WITH REASON',`Write a custom rejection message for ${app.ign}.`);
         if(reason===null) return;
+        setButtonLoading(this,true);
         await respondToApp(app,false,reason||rejectMsg);
+        setButtonLoading(this,false);
       };
     }
 
@@ -2814,13 +2976,14 @@
       document.getElementById('addAdminBox').classList.add('hidden');
       renderAdminsList();
     };
-    document.getElementById('addAdminBtn').onclick=async()=>{
+    document.getElementById('addAdminBtn').onclick=async function(){
       if(!canManageAdmins()){showAuthToast('Admin login required: Owner or Executive rank needed.');return}
       const ign=document.getElementById('newAdminIgn').value.trim();
       const password=document.getElementById('newAdminPass').value.trim();
       const rank=document.getElementById('newAdminRank').value;
       if(rank==='Owner'&&!(activeAdmin&&activeAdmin.rank==='Owner')){showAuthToast('Only Owner admin can create another Owner.');return}
       if(!ign||!password){showAuthToast('Enter admin IGN and password.');return}
+      setButtonLoading(this,true);
       try{
         await api('/api/admins',{method:'POST',token:getAdminToken(),body:{action:'add',ign,password,rank}});
         document.getElementById('newAdminIgn').value='';document.getElementById('newAdminPass').value='';
@@ -2830,6 +2993,7 @@
         await renderAdminsList();
         showCopyToast('ADMIN SAVED',`${ign} can now login from any browser.`);
       }catch(error){showAuthToast(error.message,'ADMIN ERROR')}
+      finally{setButtonLoading(this,false)}
     };
 
     async function renderAdminsList(){
@@ -2851,13 +3015,15 @@
             ${isLocked?'<span class="status solved">LOCKED</span>':'<button class="mini-btn danger-btn">REMOVE</button>'}`;
           const removeBtn=card.querySelector('button');
           if(removeBtn){
-            removeBtn.onclick=async()=>{
+            removeBtn.onclick=async function(){
               const ok=await askConfirm('REMOVE ADMIN',`Remove ${admin.ign}?`,'REMOVE');
               if(!ok) return;
+              setButtonLoading(this,true);
               try{
                 await api('/api/admins',{method:'POST',token:getAdminToken(),body:{action:'remove',ign:admin.ign}});
                 await renderAdminsList();showCopyToast('ADMIN REMOVED',`${admin.ign} was removed.`);
               }catch(error){showAuthToast(error.message,'ADMIN ERROR')}
+              finally{setButtonLoading(this,false)}
             };
           }
           wrap.appendChild(card);
@@ -2875,3 +3041,9 @@
   </script>
 </body>
 </html>
+
+
+
+
+
+
